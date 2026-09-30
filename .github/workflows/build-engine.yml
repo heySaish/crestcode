@@ -1,0 +1,52 @@
+name: Build Crest Code Engine & Extension Host
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout CrestCode Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Clone VS Code Core Engine
+        run: |
+          echo "Cloning VS Code core repository..."
+          git clone --depth 1 https://github.com/microsoft/vscode.git vscode-core
+
+      - name: Install Dependencies
+        run: |
+          cd vscode-core
+          npm ci
+
+      - name: Compile VS Code Core & Extension Host
+        run: |
+          cd vscode-core
+          npx gulp compile
+
+      - name: Package Extension Host & Web Assets
+        run: |
+          mkdir -p dist/engine/extHost
+          mkdir -p dist/engine/web-workbench
+          cp -r vscode-core/out/vs/workbench/api/node/* dist/engine/extHost/
+          if [ -d "vscode-core/out-vscode-web" ]; then
+            cp -r vscode-core/out-vscode-web/* dist/engine/web-workbench/
+          fi
+          echo "Build completed successfully."
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crest-vscode-engine
+          path: dist/engine/
