@@ -40,11 +40,11 @@ jobs:
           cd vscode-core
           npx gulp compile
 
-      - name: Package Extension Host, Runtime Node Modules & Web Assets
+      - name: Package Complete Compiled Engine (out/ & node_modules/)
         run: |
-          mkdir -p dist/engine/extHost
-          mkdir -p dist/engine/web-workbench
-          cp -r vscode-core/out/vs/workbench/api/node/* dist/engine/extHost/
+          mkdir -p dist/engine/out
+          cp -r vscode-core/out/* dist/engine/out/
+          # Copy production node_modules (excluding heavy test/dev binaries)
           cp -r vscode-core/node_modules dist/engine/node_modules
           if [ -d "vscode-core/out-vscode-web" ]; then
             cp -r vscode-core/out-vscode-web/* dist/engine/web-workbench/
