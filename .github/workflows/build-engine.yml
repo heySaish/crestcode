@@ -30,28 +30,36 @@ jobs:
           echo "Cloning VS Code core repository..."
           git clone --depth 1 https://github.com/microsoft/vscode.git vscode-core
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Compile
         run: |
           cd vscode-core
           npm ci
-
-      - name: Compile VS Code Core & Extension Host
-        run: |
-          cd vscode-core
           npx gulp compile
 
-      - name: Package Complete Compiled Engine (out/ & node_modules/)
+      - name: Prune & Package Ultra-Lightweight ARM64 Bundle
         run: |
           mkdir -p dist/engine/out
           cp -r vscode-core/out/* dist/engine/out/
-          # Copy production node_modules (excluding heavy test/dev binaries)
+
+          # Prune devDependencies (removes playwright, electron dev tools, build junk)
+          cd vscode-core
+          npm prune --omit=dev
+          cd ..
+
+          # Delete Windows, Mac, x86 binary bloat (keep only linux-arm64 / android-arm64)
+          find vscode-core/node_modules -type d -name "*win32*" -exec rm -rf {} + 2>/dev/null || true
+          find vscode-core/node_modules -type d -name "*darwin*" -exec rm -rf {} + 2>/dev/null || true
+          find vscode-core/node_modules -type d -name "*x64*" ! -name "*arm64*" -exec rm -rf {} + 2>/dev/null || true
+          rm -rf vscode-core/node_modules/@playwright 2>/dev/null || true
+          rm -rf vscode-core/node_modules/electron 2>/dev/null || true
+
           cp -r vscode-core/node_modules dist/engine/node_modules
           if [ -d "vscode-core/out-vscode-web" ]; then
             cp -r vscode-core/out-vscode-web/* dist/engine/web-workbench/
           fi
-          echo "Build completed successfully."
+          echo "Ultra-lightweight ARM64 Engine ready!"
 
-      - name: Upload Build Artifacts
+      - name: Upload Lightweight Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: crest-vscode-engine
