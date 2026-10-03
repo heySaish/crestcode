@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Crest Mobile Editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="vs/editor/editor.main.css">
+</head>
+<body>
+  <div id="app">
+    <header class="navbar">
+      <div class="brand">
+        <span class="logo-icon">⚡</span>
+        <span class="brand-title">Crest Code</span>
+        <span class="badge" id="editor-badge">Monaco</span>
+      </div>
+      <div class="actions">
+        <span class="status-indicator" id="status-pill">Initializing...</span>
+        <button id="btn-theme" class="icon-btn" title="Toggle Theme">🌙</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <div class="file-info">
+        <span class="file-icon">📄</span>
+        <span class="file-name" id="current-filename">app.js</span>
+      </div>
+      <div class="editor-stats">
+        <span id="stat-lang">JavaScript</span> |
+        <span id="stat-lines">0 lines</span> |
+        <span id="stat-pos">Ln 1, Col 1</span>
+      </div>
+    </div>
+
+    <main id="editor-container"></main>
+
+    <footer class="footer">
+      <div class="footer-status" id="footer-status-text">Crest WebView Engine • Ready</div>
+    </footer>
+  </div>
+
+  <script src="vs/loader.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
