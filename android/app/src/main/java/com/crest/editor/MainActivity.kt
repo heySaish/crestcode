@@ -10,13 +10,17 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import com.crest.editor.ui.components.*
+import com.crest.editor.ui.theme.CrestTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -27,17 +31,55 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+            CrestTheme {
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val scope = rememberCoroutineScope()
+
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet {
+                            CrestFileDrawer(
+                                onCloseDrawer = {
+                                    scope.launch { drawerState.close() }
+                                }
+                            )
+                        }
+                    }
                 ) {
-                    CrestEditorScreen(
-                        onWebViewCreated = { wv ->
-                            webView = wv
+                    Scaffold(
+                        topBar = {
+                            Column {
+                                CrestTopBar(
+                                    onMenuClick = {
+                                        scope.launch {
+                                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                        }
+                                    }
+                                )
+                                CrestTabBar()
+                            }
                         },
-                        bridge = CrestAndroidBridge()
-                    )
+                        bottomBar = {
+                            Column {
+                                CrestExtraKeysBar()
+                                CrestStatusBar()
+                            }
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            CrestEditorScreen(
+                                onWebViewCreated = { wv ->
+                                    webView = wv
+                                },
+                                bridge = CrestAndroidBridge()
+                            )
+                        }
+                    }
                 }
             }
         }
