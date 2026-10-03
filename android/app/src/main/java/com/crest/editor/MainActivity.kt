@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.crest.editor.ui.components.*
 import com.crest.editor.ui.theme.CrestTheme
@@ -76,7 +77,7 @@ class MainActivity : ComponentActivity() {
                                 onWebViewCreated = { wv ->
                                     webView = wv
                                 },
-                                bridge = CrestAndroidBridge()
+                                bridge = remember { CrestAndroidBridge() }
                             )
                         }
                     }
@@ -108,49 +109,73 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
 fun CrestEditorScreen(
     onWebViewCreated: (WebView) -> Unit,
     bridge: Any
 ) {
+    val context = LocalContext.current
+    val webView = remember {
+        WebView(context).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            isFocusable = true
+            isFocusableInTouchMode = true
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                allowContentAccess = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
+            }
+
+            addJavascriptInterface(bridge, "CrestAndroidBridge")
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    consoleMessage?.let {
+                        Log.d("CrestWebView", "[JS Console] ${it.sourceId()}:${it.lineNumber()} -> ${it.message()}")
+                    }
+                    return true
+                }
+            }
+
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    Log.d("CrestWebView", "WebView page finished loading: $url")
+                }
+            }
+
+            setOnTouchListener { v, _ ->
+                if (!v.hasFocus()) {
+                    v.requestFocus()
+                }
+                false
+            }
+
+            loadUrl("file:///android_asset/editor/index.html")
+            onWebViewCreated(this)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            webView.stopLoading()
+            webView.destroy()
+        }
+    }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
-        factory = { context ->
-            WebView(context).apply {
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    useWideViewPort = true
-                    loadWithOverviewMode = true
-                    setSupportZoom(false)
-                    builtInZoomControls = false
-                    displayZoomControls = false
-                }
-
-                addJavascriptInterface(bridge, "CrestAndroidBridge")
-
-                webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                        consoleMessage?.let {
-                            Log.d("CrestWebView", "[JS Console] ${it.sourceId()}:${it.lineNumber()} -> ${it.message()}")
-                        }
-                        return true
-                    }
-                }
-
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        Log.d("CrestWebView", "WebView page finished loading: $url")
-                    }
-                }
-
-                loadUrl("file:///android_asset/editor/index.html")
-                onWebViewCreated(this)
-            }
-        }
+        factory = { webView }
     )
 }
