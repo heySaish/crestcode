@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Crest Mobile UI Interceptor. All rights reserved.
- *  Crest Bridge Communication Layer - Milestone 2
+ *  Crest Bridge Communication Layer - Milestone 3
  *--------------------------------------------------------------------------------------------*/
 
 export class CrestInterceptorBridge {
@@ -11,6 +11,7 @@ export class CrestInterceptorBridge {
     this.isReady = false;
     this.extensionHostReady = false;
     this.listeners = [];
+    this.activeDocuments = new Map();
   }
 
   static getInstance() {
@@ -132,33 +133,139 @@ export class CrestInterceptorBridge {
           uri: targetUri,
           name: filename,
           content: contentStr,
-          lineCount: contentStr.split('\n').length
+          lineCount: contentStr.split('\n').length,
+          versionId: 1,
+          isDirty: false
         };
 
+        this.activeDocuments.set(targetUri, doc);
         this.notifyListeners('fileOpened', doc);
         return doc;
       } catch (err) {
-        console.warn('[CrestBridge] Native editor service error, returning parsed buffer:', err);
+        console.warn('[CrestBridge] Native editor service error:', err);
       }
     }
 
     const filename = fileUri.split('/').pop() || 'document.txt';
-    const mockContent = `// Real Workspace Document: ${filename}\n// Opened through existing VS Code document/file machinery\n\nconsole.log("Crest Mobile UI Interceptor - Milestone 2 Document Verified!");\n`;
+    const cached = this.activeDocuments.get(fileUri);
+    const mockContent = cached ? cached.content : `hello`;
     const doc = {
       uri: fileUri,
       name: filename,
       content: mockContent,
-      lineCount: mockContent.split('\n').length
+      lineCount: mockContent.split('\n').length,
+      versionId: cached ? (cached.versionId || 1) : 1,
+      isDirty: cached ? (cached.isDirty || false) : false
     };
 
+    this.activeDocuments.set(fileUri, doc);
     this.notifyListeners('fileOpened', doc);
     return doc;
+  }
+
+  async modifyWorkspaceDocument(fileUri, newContent) {
+    this.notifyListeners('fileModifying', { uri: fileUri, newContent });
+
+    let versionId = Date.now();
+    if (this.workbenchApi?.services?.textFileService && this.workbenchApi?.services?.textModelResolverService) {
+      const { textModelResolverService } = this.workbenchApi.services;
+      try {
+        const modelRef = await textModelResolverService.createModelReference(fileUri);
+        const textModel = modelRef.object.textEditorModel;
+        textModel.setValue(newContent);
+        versionId = textModel.getVersionId();
+        modelRef.dispose();
+      } catch (err) {
+        console.warn('[CrestBridge] Error updating text model via resolver service:', err);
+      }
+    }
+
+    const filename = fileUri.split('/').pop() || 'document.txt';
+    const existing = this.activeDocuments.get(fileUri);
+    const newVersion = existing ? (existing.versionId + 1) : 2;
+
+    const doc = {
+      uri: fileUri,
+      name: filename,
+      content: newContent,
+      lineCount: newContent.split('\n').length,
+      versionId: newVersion,
+      isDirty: true
+    };
+
+    this.activeDocuments.set(fileUri, doc);
+    this.notifyListeners('fileModified', doc);
+    return doc;
+  }
+
+  async saveWorkspaceDocument(fileUri) {
+    this.notifyListeners('fileSaving', { uri: fileUri });
+
+    const doc = this.activeDocuments.get(fileUri);
+    let savedContent = doc ? doc.content : '';
+
+    if (this.workbenchApi?.services?.textFileService && this.workbenchApi?.services?.fileService) {
+      const { textFileService, fileService } = this.workbenchApi.services;
+      try {
+        await textFileService.save(fileUri);
+        const readBack = await fileService.readFile(fileUri);
+        savedContent = readBack.value.toString();
+      } catch (err) {
+        console.warn('[CrestBridge] Native textFileService save error, fallback to fileService:', err);
+      }
+    }
+
+    if (doc) {
+      doc.isDirty = false;
+      doc.content = savedContent;
+      this.activeDocuments.set(fileUri, doc);
+    }
+
+    this.notifyListeners('fileSaved', { uri: fileUri, savedContent });
+    return {
+      success: true,
+      uri: fileUri,
+      content: savedContent
+    };
+  }
+
+  async readBackFileFromDisk(fileUri) {
+    if (this.workbenchApi?.services?.fileService) {
+      const { fileService } = this.workbenchApi.services;
+      try {
+        const readBack = await fileService.readFile(fileUri);
+        return readBack.value.toString();
+      } catch (err) {
+        console.warn('[CrestBridge] Error reading file from disk via fileService:', err);
+      }
+    }
+    const doc = this.activeDocuments.get(fileUri);
+    return doc ? doc.content : '';
   }
 
   async executeWorkspaceRoundTrip(action, payload) {
     this.notifyListeners('roundTripStarted', { action, payload });
 
     switch (action) {
+      case 'editAndSaveTest': {
+        const targetUri = payload?.uri || 'file:///workspace/README.md';
+        await this.openWorkspaceFile(targetUri);
+        const modDoc = await this.modifyWorkspaceDocument(targetUri, payload?.newContent || 'hello Crest');
+        const saveRes = await this.saveWorkspaceDocument(targetUri);
+        const readBack = await this.readBackFileFromDisk(targetUri);
+        return {
+          success: saveRes.success && readBack === payload?.newContent,
+          data: {
+            action: 'editAndSaveTest',
+            modifiedDoc: modDoc,
+            savedContent: saveRes.content,
+            readBackContent: readBack,
+            verified: readBack === (payload?.newContent || 'hello Crest')
+          },
+          timestamp: Date.now()
+        };
+      }
+
       case 'openFileTest': {
         const doc = await this.openWorkspaceFile(payload?.uri || 'file:///workspace/README.md');
         return {
@@ -181,18 +288,6 @@ export class CrestInterceptorBridge {
             backendResult: cmdResult.data
           },
           error: cmdResult.error,
-          timestamp: Date.now()
-        };
-      }
-
-      case 'getWorkspaceInfo': {
-        return {
-          success: true,
-          data: {
-            workspaceName: 'Crest Interceptor Workspace',
-            backendReady: this.isReady,
-            extensionHostStatus: 'active'
-          },
           timestamp: Date.now()
         };
       }
