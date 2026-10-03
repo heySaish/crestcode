@@ -20,6 +20,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -33,18 +36,10 @@ jobs:
         run: |
           node tests/monaco_webview.test.js
 
-      - name: Grant Execute Permissions for Gradlew
-        run: |
-          chmod +x android/gradlew || true
-
       - name: Build Android Debug APK
         working-directory: ./android
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --no-daemon
-          else
-            gradle assembleDebug --no-daemon || echo "Gradle build verified"
-          fi
+          gradle assembleDebug --no-daemon
 
       - name: Upload Test Report & Android APK Artifacts
         uses: actions/upload-artifact@v4
@@ -53,4 +48,5 @@ jobs:
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             tests/
-          if-no-files-found: ignore
+          if-no-files-found: error
+
