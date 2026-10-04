@@ -20,7 +20,8 @@ data class FileTreeItem(
     val id: String,
     val name: String,
     val isDirectory: Boolean,
-    val level: Int = 0
+    val level: Int = 0,
+    val path: String = id
 )
 
 @Composable

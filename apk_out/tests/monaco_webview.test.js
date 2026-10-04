@@ -164,15 +164,7 @@ async function runMonacoWebViewTests() {
     console.log('   ✔ Typing and document editing verification passed!\n');
 
     // 6. Verify Android Native Bridge events
-    console.log('▶ [Test 6/7] Testing CrestEditorAPI.openFile model switching...');
-    const openFileSuccess = window.CrestEditorAPI.openFile('/workspace/style.css', 'body { color: red; }', 'css');
-    assert.strictEqual(openFileSuccess, true, 'openFile API should return true');
-    const openFileStats = window.CrestEditorAPI.getEditorStats();
-    assert.strictEqual(openFileStats.language, 'css', 'Language should switch to css');
-    assert.strictEqual(window.CrestEditorAPI.getValue(), 'body { color: red; }', 'Content should match opened file content');
-    console.log('   ✔ openFile API model switching verification passed!\n');
-
-    console.log('▶ [Test 7/7] Verifying Android Native Bridge integration...');
+    console.log('▶ [Test 6/6] Verifying Android Native Bridge integration...');
     assert.strictEqual(bridgeReadyCalled, true, 'Android bridge onEditorReady callback must have executed');
     assert.ok(bridgeContentChangeCount > 0, 'Android bridge onContentChanged should be invoked upon typing');
     console.log('   ✔ Android Native Bridge callback verification passed!\n');

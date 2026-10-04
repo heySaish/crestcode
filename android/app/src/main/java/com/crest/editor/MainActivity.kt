@@ -21,7 +21,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.crest.editor.ui.components.*
 import com.crest.editor.ui.theme.CrestTheme
+import com.crest.editor.workspace.WorkspaceManager
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -33,14 +36,67 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             CrestTheme {
+                val context = LocalContext.current
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
+
+                val workspaceDir = remember { WorkspaceManager.getWorkspaceDir(context) }
+                var fileTreeItems by remember {
+                    mutableStateOf(WorkspaceManager.listFilesRecursively(workspaceDir))
+                }
+
+                var openTabs by remember { mutableStateOf<List<CrestTabItem>>(emptyList()) }
+                var activeTabId by remember { mutableStateOf("") }
+                var activeLanguage by remember { mutableStateOf("javascript") }
+
+                fun openFile(file: File) {
+                    if (file.isDirectory) return
+
+                    scope.launch {
+                        val path = file.absolutePath
+                        val content = WorkspaceManager.readFileContent(file)
+                        val language = WorkspaceManager.detectLanguage(file.name)
+
+                        if (openTabs.none { it.id == path }) {
+                            openTabs = openTabs + CrestTabItem(id = path, title = file.name)
+                        }
+                        activeTabId = path
+                        activeLanguage = language
+
+                        webView?.let { wv ->
+                            val jsCode = "if (window.CrestEditorAPI && window.CrestEditorAPI.openFile) { " +
+                                    "window.CrestEditorAPI.openFile(" +
+                                    JSONObject.quote(path) + ", " +
+                                    JSONObject.quote(content) + ", " +
+                                    JSONObject.quote(language) + "); }"
+                            wv.evaluateJavascript(jsCode, null)
+                        }
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    fileTreeItems = WorkspaceManager.listFilesRecursively(workspaceDir)
+                    val firstFile = fileTreeItems.firstOrNull { !it.isDirectory }
+                    firstFile?.let { item ->
+                        openFile(File(item.path))
+                    }
+                }
 
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
                         ModalDrawerSheet {
                             CrestFileDrawer(
+                                projectName = workspaceDir.name,
+                                fileList = fileTreeItems,
+                                onFileSelect = { item ->
+                                    scope.launch {
+                                        drawerState.close()
+                                        if (!item.isDirectory) {
+                                            openFile(File(item.path))
+                                        }
+                                    }
+                                },
                                 onCloseDrawer = {
                                     scope.launch { drawerState.close() }
                                 }
@@ -52,19 +108,35 @@ class MainActivity : ComponentActivity() {
                         topBar = {
                             Column {
                                 CrestTopBar(
+                                    projectName = "workspace / " + (openTabs.find { it.id == activeTabId }?.title ?: "Crest"),
                                     onMenuClick = {
                                         scope.launch {
                                             if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                         }
                                     }
                                 )
-                                CrestTabBar()
+                                CrestTabBar(
+                                    tabs = openTabs,
+                                    activeTabId = activeTabId,
+                                    onTabSelect = { tabId ->
+                                        openFile(File(tabId))
+                                    },
+                                    onTabClose = { tabId ->
+                                        val newTabs = openTabs.filterNot { it.id == tabId }
+                                        openTabs = newTabs
+                                        if (activeTabId == tabId && newTabs.isNotEmpty()) {
+                                            openFile(File(newTabs.last().id))
+                                        }
+                                    }
+                                )
                             }
                         },
                         bottomBar = {
                             Column {
                                 CrestExtraKeysBar()
-                                CrestStatusBar()
+                                CrestStatusBar(
+                                    language = activeLanguage
+                                )
                             }
                         }
                     ) { innerPadding ->
@@ -76,6 +148,9 @@ class MainActivity : ComponentActivity() {
                             CrestEditorScreen(
                                 onWebViewCreated = { wv ->
                                     webView = wv
+                                    if (activeTabId.isNotEmpty()) {
+                                        openFile(File(activeTabId))
+                                    }
                                 },
                                 bridge = remember { CrestAndroidBridge() }
                             )

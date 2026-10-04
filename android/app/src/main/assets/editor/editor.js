@@ -204,6 +204,22 @@ const result = greetCrestUser("Developer");
       }
       return false;
     },
+    openFile: function(filePath, content, languageId) {
+      if (!editor) return false;
+      const uri = monaco.Uri.file(filePath);
+      let model = monaco.editor.getModel(uri);
+      if (!model) {
+        model = monaco.editor.createModel(content, languageId, uri);
+      } else {
+        if (model.getValue() !== content) {
+          model.setValue(content);
+        }
+        monaco.editor.setModelLanguage(model, languageId);
+      }
+      editor.setModel(model);
+      updateStats();
+      return true;
+    },
     getEditorStats: function() {
       if (!editor) return null;
       const model = editor.getModel();
