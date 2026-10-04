@@ -10,17 +10,21 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.crest.editor.ui.components.*
-import com.crest.editor.ui.theme.CrestTheme
+import com.crest.editor.ui.theme.*
 import com.crest.editor.workspace.WorkspaceManager
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -48,6 +52,12 @@ class MainActivity : ComponentActivity() {
                 var openTabs by remember { mutableStateOf<List<CrestTabItem>>(emptyList()) }
                 var activeTabId by remember { mutableStateOf("") }
                 var activeLanguage by remember { mutableStateOf("javascript") }
+
+                // Dialog states for creation
+                var showCreateDialog by remember { mutableStateOf(false) }
+                var isFolderCreation by remember { mutableStateOf(false) }
+                var newNameInput by remember { mutableStateOf("") }
+                var validationError by remember { mutableStateOf<String?>(null) }
 
                 fun openFile(file: File) {
                     if (file.isDirectory) return
@@ -82,6 +92,92 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Creation Dialog
+                if (showCreateDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showCreateDialog = false
+                            newNameInput = ""
+                            validationError = null
+                        },
+                        title = {
+                            Text(
+                                text = if (isFolderCreation) "New Folder" else "New File",
+                                color = CrestTextActive
+                            )
+                        },
+                        text = {
+                            Column {
+                                OutlinedTextField(
+                                    value = newNameInput,
+                                    onValueChange = { valStr ->
+                                        newNameInput = valStr
+                                        validationError = WorkspaceManager.validateName(workspaceDir, valStr)
+                                    },
+                                    label = { Text(if (isFolderCreation) "Folder Name" else "File Name") },
+                                    singleLine = true,
+                                    isError = validationError != null,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = CrestAccentPrimary,
+                                        focusedLabelColor = CrestAccentPrimary
+                                    )
+                                )
+                                if (validationError != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = validationError!!,
+                                        color = CrestAccentRed,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    val err = WorkspaceManager.validateName(workspaceDir, newNameInput)
+                                    if (err == null) {
+                                        scope.launch {
+                                            val result = if (isFolderCreation) {
+                                                WorkspaceManager.createNewFolder(workspaceDir, newNameInput)
+                                            } else {
+                                                WorkspaceManager.createNewFile(workspaceDir, newNameInput)
+                                            }
+                                            result.onSuccess { createdFile ->
+                                                showCreateDialog = false
+                                                newNameInput = ""
+                                                validationError = null
+                                                fileTreeItems = WorkspaceManager.listFilesRecursively(workspaceDir)
+                                                if (!createdFile.isDirectory) {
+                                                    openFile(createdFile)
+                                                }
+                                            }.onFailure { ex ->
+                                                validationError = ex.message ?: "Creation failed."
+                                            }
+                                        }
+                                    } else {
+                                        validationError = err
+                                    }
+                                }
+                            ) {
+                                Text("Create", color = CrestAccentPrimary)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showCreateDialog = false
+                                    newNameInput = ""
+                                    validationError = null
+                                }
+                            ) {
+                                Text("Cancel", color = CrestTextSecondary)
+                            }
+                        },
+                        containerColor = CrestSurfaceHeader
+                    )
+                }
+
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
@@ -97,6 +193,18 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
+                                onNewFileClick = {
+                                    isFolderCreation = false
+                                    newNameInput = ""
+                                    validationError = null
+                                    showCreateDialog = true
+                                },
+                                onNewFolderClick = {
+                                    isFolderCreation = true
+                                    newNameInput = ""
+                                    validationError = null
+                                    showCreateDialog = true
+                                },
                                 onCloseDrawer = {
                                     scope.launch { drawerState.close() }
                                 }
@@ -108,7 +216,7 @@ class MainActivity : ComponentActivity() {
                         topBar = {
                             Column {
                                 CrestTopBar(
-                                    projectName = "workspace / " + (openTabs.find { it.id == activeTabId }?.title ?: "Crest"),
+                                    projectName = "workspace / " + (openTabs.find { it.id == activeTabId }?.title ?: ""),
                                     onMenuClick = {
                                         scope.launch {
                                             if (drawerState.isClosed) drawerState.open() else drawerState.close()
@@ -124,8 +232,17 @@ class MainActivity : ComponentActivity() {
                                     onTabClose = { tabId ->
                                         val newTabs = openTabs.filterNot { it.id == tabId }
                                         openTabs = newTabs
-                                        if (activeTabId == tabId && newTabs.isNotEmpty()) {
-                                            openFile(File(newTabs.last().id))
+                                        if (activeTabId == tabId) {
+                                            if (newTabs.isNotEmpty()) {
+                                                openFile(File(newTabs.last().id))
+                                            } else {
+                                                activeTabId = ""
+                                                activeLanguage = "-"
+                                                webView?.evaluateJavascript(
+                                                    "if (window.CrestEditorAPI && window.CrestEditorAPI.clearEditor) { window.CrestEditorAPI.clearEditor(); }",
+                                                    null
+                                                )
+                                            }
                                         }
                                     }
                                 )
@@ -154,6 +271,37 @@ class MainActivity : ComponentActivity() {
                                 },
                                 bridge = remember { CrestAndroidBridge() }
                             )
+
+                            if (openTabs.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(CrestBackground),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Default.Code,
+                                            contentDescription = null,
+                                            tint = CrestTextSecondary,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = "No Open Files",
+                                            color = CrestTextSecondary,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Select a file from the menu drawer to start editing",
+                                            color = CrestTextSecondary.copy(alpha = 0.7f),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

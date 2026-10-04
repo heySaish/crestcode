@@ -110,6 +110,58 @@ h1 {
         }
     }
 
+    fun validateName(parentDir: File, name: String): String? {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) {
+            return "A file or folder name must be provided."
+        }
+        val illegalChars = Regex("[/\\\\:*?\"<>|]")
+        if (illegalChars.containsMatchIn(trimmed)) {
+            return "The name is not valid as a file or folder name."
+        }
+        val target = File(parentDir, trimmed)
+        if (target.exists()) {
+            return "A file or folder '$trimmed' already exists at this location."
+        }
+        return null
+    }
+
+    suspend fun createNewFile(parentDir: File, name: String): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val trimmed = name.trim()
+            val validationError = validateName(parentDir, trimmed)
+            if (validationError != null) {
+                return@withContext Result.failure(IllegalArgumentException(validationError))
+            }
+            val newFile = File(parentDir, trimmed)
+            if (newFile.createNewFile()) {
+                Result.success(newFile)
+            } else {
+                Result.failure(IllegalStateException("Could not create file."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createNewFolder(parentDir: File, name: String): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val trimmed = name.trim()
+            val validationError = validateName(parentDir, trimmed)
+            if (validationError != null) {
+                return@withContext Result.failure(IllegalArgumentException(validationError))
+            }
+            val newDir = File(parentDir, trimmed)
+            if (newDir.mkdirs()) {
+                Result.success(newDir)
+            } else {
+                Result.failure(IllegalStateException("Could not create directory."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun readFileContent(file: File): String = withContext(Dispatchers.IO) {
         if (file.exists() && file.isFile) {
             file.readText()

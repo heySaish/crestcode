@@ -27,17 +27,10 @@ data class FileTreeItem(
 @Composable
 fun CrestFileDrawer(
     projectName: String = "Crest Project",
-    fileList: List<FileTreeItem> = listOf(
-        FileTreeItem("1", "src", true, 0),
-        FileTreeItem("2", "web", true, 1),
-        FileTreeItem("3", "index.html", false, 2),
-        FileTreeItem("4", "editor.js", false, 2),
-        FileTreeItem("5", "styles.css", false, 2),
-        FileTreeItem("6", "android", true, 0),
-        FileTreeItem("7", "package.json", false, 0),
-        FileTreeItem("8", "README.md", false, 0)
-    ),
+    fileList: List<FileTreeItem> = emptyList(),
     onFileSelect: (FileTreeItem) -> Unit = {},
+    onNewFileClick: () -> Unit = {},
+    onNewFolderClick: () -> Unit = {},
     onCloseDrawer: () -> Unit = {}
 ) {
     Column(
@@ -71,7 +64,7 @@ fun CrestFileDrawer(
                 modifier = Modifier.weight(1f)
             )
 
-            IconButton(onClick = {}) {
+            IconButton(onClick = onNewFileClick) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "New File",
@@ -79,7 +72,7 @@ fun CrestFileDrawer(
                 )
             }
 
-            IconButton(onClick = {}) {
+            IconButton(onClick = onNewFolderClick) {
                 Icon(
                     imageVector = Icons.Default.CreateNewFolder,
                     contentDescription = "New Folder",
