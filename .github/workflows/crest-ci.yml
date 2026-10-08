@@ -1,4 +1,4 @@
-name: Crest Editor CI
+name: Crest Editor CI testing
 
 on:
   push:
