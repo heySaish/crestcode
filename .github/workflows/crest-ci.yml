@@ -17,10 +17,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build Debug APK
+      - name: Check Build Environment
         run: |
-          chmod +x ./gradlew
-          ./gradlew :app:assembleDebug
+          java -version
+          gradle --version
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
