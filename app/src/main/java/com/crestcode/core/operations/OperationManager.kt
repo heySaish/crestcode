@@ -19,8 +19,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 class OperationManager(
-    private val fileSystem: FileSystem,
-    private val alpineManager: com.crestcode.runtime.AlpineManager? = null
+    private val fileSystem: FileSystem
 ) {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _operations = MutableStateFlow<List<Operation>>(emptyList())
@@ -69,30 +68,7 @@ class OperationManager(
         val job = scope.launch {
             updateStatus(id, OperationStatus.RUNNING)
             try {
-                var resultCode = -1
-
-                if (alpineManager != null && alpineManager.isInstalled) {
-                    android.util.Log.d("OperationManager", "⚡ Using Alpine CLI Archive Engine for EXTRACT: ${File(archivePath).name}")
-                    resultCode = alpineManager.extractArchiveWithAlpine(archivePath, destinationDir) { processed, total ->
-                        updateProgress(id, processed, total, File(archivePath).name)
-                    }
-                } else {
-                    AppLogger.e("OPERATIONS", "❌ Alpine Manager is not initialized/installed")
-                }
-
-                if (resultCode == 0) {
-                    updateStatus(id, OperationStatus.COMPLETED)
-                    AppLogger.i("OPERATIONS", "✅ EXTRACT COMPLETED: ${File(archivePath).name}")
-                } else if (resultCode == -2) {
-                    updateStatus(id, OperationStatus.CANCELLED)
-                    AppLogger.i("OPERATIONS", "🛑 EXTRACT CANCELLED: ${File(archivePath).name}")
-                } else {
-                    updateError(id, "Alpine CLI Extraction failed (exit code $resultCode)")
-                    AppLogger.e("OPERATIONS", "❌ EXTRACT FAILED: ${File(archivePath).name} (code $resultCode)")
-                }
-            } catch (e: Exception) {
-                updateError(id, e.localizedMessage ?: "Unknown error")
-                AppLogger.e("OPERATIONS", "❌ EXTRACT ERROR: ${File(archivePath).name} - ${e.message}")
+                updateError(id, "Archive extraction not implemented")
             } finally {
                 if (tokenId != 0L) {
                     LocalFileSystem.nativeFreeCancelToken(tokenId)
@@ -133,30 +109,7 @@ class OperationManager(
         val job = scope.launch {
             updateStatus(id, OperationStatus.RUNNING)
             try {
-                var resultCode = -1
-
-                if (alpineManager != null && alpineManager.isInstalled) {
-                    android.util.Log.d("OperationManager", "⚡ Using Alpine CLI Archive Engine for COMPRESS ($format): ${File(destinationArchive).name}")
-                    resultCode = alpineManager.compressArchiveWithAlpine(format, destinationArchive, sources) { processed, total ->
-                        updateProgress(id, processed, total, File(destinationArchive).name)
-                    }
-                } else {
-                    AppLogger.e("OPERATIONS", "❌ Alpine Manager is not initialized/installed")
-                }
-
-                if (resultCode == 0) {
-                    updateStatus(id, OperationStatus.COMPLETED)
-                    AppLogger.i("OPERATIONS", "✅ COMPRESS COMPLETED: ${File(destinationArchive).name}")
-                } else if (resultCode == -2) {
-                    updateStatus(id, OperationStatus.CANCELLED)
-                    AppLogger.i("OPERATIONS", "🛑 COMPRESS CANCELLED: ${File(destinationArchive).name}")
-                } else {
-                    updateError(id, "Alpine CLI Compression failed (exit code $resultCode)")
-                    AppLogger.e("OPERATIONS", "❌ COMPRESS FAILED: ${File(destinationArchive).name} (code $resultCode)")
-                }
-            } catch (e: Exception) {
-                updateError(id, e.localizedMessage ?: "Unknown error")
-                AppLogger.e("OPERATIONS", "❌ COMPRESS ERROR: ${File(destinationArchive).name} - ${e.message}")
+                updateError(id, "Archive compression not implemented")
             } finally {
                 if (tokenId != 0L) {
                     LocalFileSystem.nativeFreeCancelToken(tokenId)

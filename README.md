@@ -49,9 +49,9 @@
 ## 🛠️ Architecture & Project Structure
 
 ```
-Xt-Manager/
+CrestCode/
 ├── app/                              # Jetpack Compose Android Application
-│   ├── src/main/java/com/xtmanager/
+│   ├── src/main/java/com/crestcode/
 │   │   ├── core/
 │   │   │   ├── filesystem/           # LocalFileSystem, SafStorageManager, ArchiveFileSystem
 │   │   │   ├── logger/               # AppLogger infrastructure

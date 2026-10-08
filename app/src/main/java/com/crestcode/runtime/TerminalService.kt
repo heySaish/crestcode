@@ -16,7 +16,7 @@ import com.crestcode.MainActivity
 class TerminalService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "xtmanager_terminal_service"
+        const val CHANNEL_ID = "crestcode_terminal_service"
         const val NOTIFICATION_ID = 1001
         const val ACTION_EXIT = "com.crestcode.ACTION_EXIT_TERMINAL"
         const val ACTION_WAKELOCK_TOGGLE = "com.crestcode.ACTION_WAKELOCK_TOGGLE"
@@ -80,7 +80,7 @@ class TerminalService : Service() {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "XtManager::TerminalWakeLock"
+                "CrestCode::TerminalWakeLock"
             )
         }
         wakeLock?.let {
@@ -104,7 +104,7 @@ class TerminalService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "XT Manager Terminal Service",
+                "CrestCode Terminal Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps Alpine Linux Terminal session active"
@@ -147,7 +147,7 @@ class TerminalService : Service() {
         val wakelockActionText = if (isWakeLockAcquired) "Release wakelock" else "Acquire wakelock"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("XT Manager")
+            .setContentTitle("CrestCode")
             .setContentText("1 session")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
