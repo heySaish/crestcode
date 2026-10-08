@@ -8,87 +8,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Check for Rust changes
-      id: changes
-      uses: dorny/paths-filter@v3
-      with:
-        filters: |
-          rust:
-            - 'native-fs/**'
-            - 'xt-preview/**'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      - name: Build Debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug
 
-    - name: Set up Rust Toolchain
-      if: steps.changes.outputs.rust == 'true' || hashFiles('app/src/main/jniLibs/arm64-v8a/libxt_fs.so') == ''
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: aarch64-linux-android
-
-    - name: Cache cargo-ndk
-      if: steps.changes.outputs.rust == 'true' || hashFiles('app/src/main/jniLibs/arm64-v8a/libxt_fs.so') == ''
-      id: cache-cargo-ndk
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/bin/cargo-ndk
-        key: ${{ runner.os }}-cargo-ndk
-
-    - name: Install cargo-ndk
-      if: (steps.changes.outputs.rust == 'true' || hashFiles('app/src/main/jniLibs/arm64-v8a/libxt_fs.so') == '') && steps.cache-cargo-ndk.outputs.cache-hit != 'true'
-      run: cargo install cargo-ndk || true
-
-    - name: Rust Cargo Cache
-      if: steps.changes.outputs.rust == 'true' || hashFiles('app/src/main/jniLibs/arm64-v8a/libxt_fs.so') == ''
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: |
-          native-fs
-          xt-preview
-
-    - name: Build Rust Native Engine (libxt_fs.so)
-      if: steps.changes.outputs.rust == 'true' || hashFiles('app/src/main/jniLibs/arm64-v8a/libxt_fs.so') == ''
-      run: |
-        mkdir -p app/src/main/jniLibs/arm64-v8a
-        cd native-fs
-        cargo ndk -t arm64-v8a -o ../app/src/main/jniLibs build --release
-
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-version: '9.7.1'
-
-    - name: Decode Signing Keystore
-      continue-on-error: true
-      run: |
-        if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-        fi
-
-    - name: Build Debug APK
-      env:
-        RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-        RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-        RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-      run: gradle assembleDebug
-
-    - name: Remove Keystore File
-      if: always()
-      run: rm -f app/release.keystore
-
-    - name: Upload Debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-
-
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: crestcode-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
