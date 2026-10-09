@@ -4,6 +4,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
+import org.json.JSONTokener
 
 class MonacoBridge(
     private var onReadyCallback: (() -> Unit)? = null,
@@ -72,16 +73,22 @@ class MonacoBridge(
             webView?.let { wv ->
                 wv.evaluateJavascript("window.CrestEditorAPI ? window.CrestEditorAPI.getValue() : ''") { result ->
                     // evaluateJavascript wraps string result in quotes or returns "null"
-                    val unquoted = if (result != null && result.length >= 2 && result.startsWith("\"") && result.endsWith("\"")) {
-                        try {
-                            JSONObject.unquote(result)
-                        } catch (_: Exception) {
-                            result.substring(1, result.length - 1)
+                    val decoded = try {
+                        if (result == null || result == "null") {
+                            null
+                        } else {
+                            JSONTokener(result).nextValue()
                         }
-                    } else {
-                        result ?: ""
+                    } catch (e: Exception) {
+                        Log.e("MonacoBridge", "Failed to decode editor content", e)
+                        null
                     }
-                    callback(unquoted)
+
+                    if (decoded is String) {
+                        callback(decoded)
+                    } else {
+                        Log.e("MonacoBridge", "Editor returned no valid string content")
+                    }
                 }
             }
         }

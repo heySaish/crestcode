@@ -68,10 +68,10 @@ class MainActivity : ComponentActivity() {
 
                 val monacoBridge = remember {
                     MonacoBridge(
-                        onContentChanged = { _ ->
+                        onContentChangedCallback = { _ ->
                             viewModel.markActiveTabModified(true)
                         },
-                        onSaveRequested = { content ->
+                        onSaveRequestedCallback = { content ->
                             val activePath = viewModel.activeTabId.value
                             if (activePath.isNotEmpty()) {
                                 viewModel.saveContent(context, activePath, content)
