@@ -242,7 +242,6 @@ fun TerminalScreen(
                             setTextSize(36) // Default text size
                             isFocusable = true
                             isFocusableInTouchMode = true
-                            requestFocus()
                         }
                         terminalViewRef = view
 
@@ -257,11 +256,20 @@ fun TerminalScreen(
                                 val client = TerminalSessionManager.activeClient
                                 clientRef = client
                                 view.post {
-                                    if (client != null) {
-                                        client.terminalView = view
-                                        view.setTerminalViewClient(client)
+                                    if (client == null) {
+                                        android.util.Log.e(
+                                            "TerminalScreen",
+                                            "Cannot attach terminal session: TerminalViewClient is null"
+                                        )
+                                        statusText = "Terminal Client Initialization Failed"
+                                        return@post
                                     }
+
+                                    client.terminalView = view
+                                    view.setTerminalViewClient(client)
                                     view.attachSession(session)
+
+                                    view.requestFocus()
                                     showKeyboard()
                                 }
                             }
