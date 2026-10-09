@@ -18,6 +18,7 @@ import com.crestcode.ui.theme.*
 fun CrestTopBar(
     projectName: String = "Crest Project",
     onMenuClick: () -> Unit = {},
+    onSaveClick: () -> Unit = {},
     onRunClick: () -> Unit = {},
     onUndoClick: () -> Unit = {},
     onRedoClick: () -> Unit = {},
@@ -50,6 +51,14 @@ fun CrestTopBar(
                 .weight(1f)
                 .padding(horizontal = 4.dp)
         )
+
+        IconButton(onClick = onSaveClick) {
+            Icon(
+                imageVector = Icons.Default.Save,
+                contentDescription = "Save File",
+                tint = CrestTextPrimary
+            )
+        }
 
         IconButton(onClick = onRunClick) {
             Icon(

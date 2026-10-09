@@ -4,10 +4,10 @@ import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.Log
 import android.webkit.ConsoleMessage
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -23,23 +23,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.crestcode.core.settings.SettingsManager
+import com.crestcode.editor.MonacoBridge
+import com.crestcode.runtime.AlpineManager
+import com.crestcode.ui.MainViewModel
+import com.crestcode.ui.TerminalScreen
 import com.crestcode.ui.components.*
 import com.crestcode.ui.theme.*
 import com.crestcode.workspace.WorkspaceManager
-import com.crestcode.ui.TerminalScreen
-import com.crestcode.runtime.AlpineManager
-import com.crestcode.core.settings.SettingsManager
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.io.File
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var alpineManager: AlpineManager
     private lateinit var settingsManager: SettingsManager
-
     private var webView: WebView? = null
-    private val TAG = "CrestWebView"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,55 +50,46 @@ class MainActivity : ComponentActivity() {
         setContent {
             CrestTheme {
                 val context = LocalContext.current
+                val viewModel: MainViewModel = viewModel()
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
 
+                val fileTreeItems by viewModel.fileTreeItems.collectAsState()
+                val openTabs by viewModel.openTabs.collectAsState()
+                val activeTabId by viewModel.activeTabId.collectAsState()
+                val activeLanguage by viewModel.activeLanguage.collectAsState()
+                val showTerminal by viewModel.showTerminal.collectAsState()
+
+                val showCreateDialog by viewModel.showCreateDialog.collectAsState()
+                val isFolderCreation by viewModel.isFolderCreation.collectAsState()
+                val newNameInput by viewModel.newNameInput.collectAsState()
+                val validationError by viewModel.validationError.collectAsState()
+                val toastMessage by viewModel.toastMessage.collectAsState()
+
+                val monacoBridge = remember {
+                    MonacoBridge(
+                        onContentChanged = { _ ->
+                            viewModel.markActiveTabModified(true)
+                        },
+                        onSaveRequested = { content ->
+                            val activePath = viewModel.activeTabId.value
+                            if (activePath.isNotEmpty()) {
+                                viewModel.saveContent(context, activePath, content)
+                            }
+                        }
+                    )
+                }
+
                 val workspaceDir = remember { WorkspaceManager.getWorkspaceDir(context) }
-                var fileTreeItems by remember {
-                    mutableStateOf(WorkspaceManager.listFilesRecursively(workspaceDir))
-                }
-
-                var openTabs by remember { mutableStateOf<List<CrestTabItem>>(emptyList()) }
-                var activeTabId by remember { mutableStateOf("") }
-                var activeLanguage by remember { mutableStateOf("javascript") }
-
-                // Dialog states for creation
-                var showCreateDialog by remember { mutableStateOf(false) }
-            var showTerminal by remember { mutableStateOf(false) }
-                var isFolderCreation by remember { mutableStateOf(false) }
-                var newNameInput by remember { mutableStateOf("") }
-                var validationError by remember { mutableStateOf<String?>(null) }
-
-                fun openFile(file: File) {
-                    if (file.isDirectory) return
-
-                    scope.launch {
-                        val path = file.absolutePath
-                        val content = WorkspaceManager.readFileContent(file)
-                        val language = WorkspaceManager.detectLanguage(file.name)
-
-                        if (openTabs.none { it.id == path }) {
-                            openTabs = openTabs + CrestTabItem(id = path, title = file.name)
-                        }
-                        activeTabId = path
-                        activeLanguage = language
-
-                        webView?.let { wv ->
-                            val jsCode = "if (window.CrestEditorAPI && window.CrestEditorAPI.openFile) { " +
-                                    "window.CrestEditorAPI.openFile(" +
-                                    JSONObject.quote(path) + ", " +
-                                    JSONObject.quote(content) + ", " +
-                                    JSONObject.quote(language) + "); }"
-                            wv.evaluateJavascript(jsCode, null)
-                        }
-                    }
-                }
 
                 LaunchedEffect(Unit) {
-                    fileTreeItems = WorkspaceManager.listFilesRecursively(workspaceDir)
-                    val firstFile = fileTreeItems.firstOrNull { !it.isDirectory }
-                    firstFile?.let { item ->
-                        openFile(File(item.path))
+                    viewModel.loadWorkspace(context, webView)
+                }
+
+                LaunchedEffect(toastMessage) {
+                    toastMessage?.let { msg ->
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        viewModel.clearToastMessage()
                     }
                 }
 
@@ -106,9 +97,7 @@ class MainActivity : ComponentActivity() {
                 if (showCreateDialog) {
                     AlertDialog(
                         onDismissRequest = {
-                            showCreateDialog = false
-                            newNameInput = ""
-                            validationError = null
+                            viewModel.closeCreateDialog()
                         },
                         title = {
                             Text(
@@ -121,8 +110,7 @@ class MainActivity : ComponentActivity() {
                                 OutlinedTextField(
                                     value = newNameInput,
                                     onValueChange = { valStr ->
-                                        newNameInput = valStr
-                                        validationError = WorkspaceManager.validateName(workspaceDir, valStr)
+                                        viewModel.updateNewNameInput(context, valStr)
                                     },
                                     label = { Text(if (isFolderCreation) "Folder Name" else "File Name") },
                                     singleLine = true,
@@ -145,29 +133,7 @@ class MainActivity : ComponentActivity() {
                         confirmButton = {
                             TextButton(
                                 onClick = {
-                                    val err = WorkspaceManager.validateName(workspaceDir, newNameInput)
-                                    if (err == null) {
-                                        scope.launch {
-                                            val result = if (isFolderCreation) {
-                                                WorkspaceManager.createNewFolder(workspaceDir, newNameInput)
-                                            } else {
-                                                WorkspaceManager.createNewFile(workspaceDir, newNameInput)
-                                            }
-                                            result.onSuccess { createdFile ->
-                                                showCreateDialog = false
-                                                newNameInput = ""
-                                                validationError = null
-                                                fileTreeItems = WorkspaceManager.listFilesRecursively(workspaceDir)
-                                                if (!createdFile.isDirectory) {
-                                                    openFile(createdFile)
-                                                }
-                                            }.onFailure { ex ->
-                                                validationError = ex.message ?: "Creation failed."
-                                            }
-                                        }
-                                    } else {
-                                        validationError = err
-                                    }
+                                    viewModel.createNewItem(context, webView)
                                 }
                             ) {
                                 Text("Create", color = CrestAccentPrimary)
@@ -176,9 +142,7 @@ class MainActivity : ComponentActivity() {
                         dismissButton = {
                             TextButton(
                                 onClick = {
-                                    showCreateDialog = false
-                                    newNameInput = ""
-                                    validationError = null
+                                    viewModel.closeCreateDialog()
                                 }
                             ) {
                                 Text("Cancel", color = CrestTextSecondary)
@@ -199,26 +163,20 @@ class MainActivity : ComponentActivity() {
                                     scope.launch {
                                         drawerState.close()
                                         if (!item.isDirectory) {
-                                            openFile(File(item.path))
+                                            viewModel.openFile(File(item.path), webView)
                                         }
                                     }
                                 },
                                 onNewFileClick = {
-                                    isFolderCreation = false
-                                    newNameInput = ""
-                                    validationError = null
-                                    showCreateDialog = true
+                                    viewModel.openCreateDialog(isFolder = false)
                                 },
                                 onNewFolderClick = {
-                                    isFolderCreation = true
-                                    newNameInput = ""
-                                    validationError = null
-                                    showCreateDialog = true
+                                    viewModel.openCreateDialog(isFolder = true)
                                 },
                                 onTerminalClick = {
                                     scope.launch {
                                         drawerState.close()
-                                        showTerminal = true
+                                        viewModel.setShowTerminal(true)
                                     }
                                 },
                                 onCloseDrawer = {
@@ -237,29 +195,25 @@ class MainActivity : ComponentActivity() {
                                         scope.launch {
                                             if (drawerState.isClosed) drawerState.open() else drawerState.close()
                                         }
+                                    },
+                                    onSaveClick = {
+                                        viewModel.requestSave(context, webView)
+                                    },
+                                    onUndoClick = {
+                                        MonacoBridge.undo(webView)
+                                    },
+                                    onRedoClick = {
+                                        MonacoBridge.redo(webView)
                                     }
                                 )
                                 CrestTabBar(
                                     tabs = openTabs,
                                     activeTabId = activeTabId,
                                     onTabSelect = { tabId ->
-                                        openFile(File(tabId))
+                                        viewModel.openFile(File(tabId), webView)
                                     },
                                     onTabClose = { tabId ->
-                                        val newTabs = openTabs.filterNot { it.id == tabId }
-                                        openTabs = newTabs
-                                        if (activeTabId == tabId) {
-                                            if (newTabs.isNotEmpty()) {
-                                                openFile(File(newTabs.last().id))
-                                            } else {
-                                                activeTabId = ""
-                                                activeLanguage = "-"
-                                                webView?.evaluateJavascript(
-                                                    "if (window.CrestEditorAPI && window.CrestEditorAPI.clearEditor) { window.CrestEditorAPI.clearEditor(); }",
-                                                    null
-                                                )
-                                            }
-                                        }
+                                        viewModel.closeTab(tabId, webView)
                                     }
                                 )
                             }
@@ -281,7 +235,7 @@ class MainActivity : ComponentActivity() {
                             if (showTerminal) {
                                 TerminalScreen(
                                     onClose = {
-                                        showTerminal = false
+                                        viewModel.setShowTerminal(false)
                                     },
                                     initialPath = workspaceDir.absolutePath,
                                     modifier = Modifier.fillMaxSize()
@@ -291,10 +245,10 @@ class MainActivity : ComponentActivity() {
                                     onWebViewCreated = { wv ->
                                         webView = wv
                                         if (activeTabId.isNotEmpty()) {
-                                            openFile(File(activeTabId))
+                                            viewModel.openFile(File(activeTabId), wv)
                                         }
                                     },
-                                    bridge = remember { CrestAndroidBridge() }
+                                    bridge = monacoBridge
                                 )
                             }
 
@@ -332,28 +286,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-    }
-
-    inner class CrestAndroidBridge {
-        @JavascriptInterface
-        fun getDeviceInfo(): String {
-            return "Android " + android.os.Build.VERSION.RELEASE + " (API " + android.os.Build.VERSION.SDK_INT + ")"
-        }
-
-        @JavascriptInterface
-        fun onEditorReady(infoJson: String) {
-            Log.i(TAG, "Monaco Editor READY signal received from WebView: $infoJson")
-        }
-
-        @JavascriptInterface
-        fun onContentChanged(contentStats: String) {
-            Log.d(TAG, "Monaco Editor document content changed: $contentStats")
-        }
-
-        @JavascriptInterface
-        fun logNative(message: String) {
-            Log.i(TAG, "[Monaco WebView Log]: $message")
         }
     }
 }

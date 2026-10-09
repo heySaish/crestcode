@@ -67,6 +67,7 @@ import com.termux.view.TerminalView
 import com.crestcode.runtime.AlpineManager
 import com.crestcode.runtime.NativeTerminalClient
 import com.crestcode.runtime.TerminalService
+import com.crestcode.runtime.TerminalSessionManager
 import kotlin.concurrent.thread
 
 import androidx.activity.compose.BackHandler
@@ -191,16 +192,19 @@ fun TerminalScreen(
                         )
                     }
                     IconButton(onClick = {
-                        currentSession?.finishIfRunning()
-                        val client = NativeTerminalClient(context)
-                        clientRef = client
-                        terminalViewRef?.post {
-                            val session = alpineManager.createAlpineTerminalSession(client, initialPath)
-                            currentSession = session
-                            terminalViewRef?.attachSession(session)
-                            statusText = "Alpine Linux Active"
-                            showKeyboard()
-                        }
+                        TerminalSessionManager.restartSession(
+                            context = context,
+                            initialPath = initialPath,
+                            onStatusUpdate = { statusText = it },
+                            onSessionReady = { session ->
+                                currentSession = session
+                                clientRef = TerminalSessionManager.activeClient
+                                terminalViewRef?.post {
+                                    terminalViewRef?.attachSession(session)
+                                    showKeyboard()
+                                }
+                            }
+                        )
                     }) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -230,42 +234,38 @@ fun TerminalScreen(
             ) {
                 AndroidView(
                     factory = { ctx ->
-                        val client = NativeTerminalClient(ctx, onSessionFinishedCallback = {
-                            statusText = "Alpine Process Terminated"
-                        })
-                        clientRef = client
-
                         val view = TerminalView(ctx, null).apply {
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
-                            setTerminalViewClient(client)
                             setTextSize(36) // Default text size
                             isFocusable = true
                             isFocusableInTouchMode = true
                             requestFocus()
                         }
-                        client.terminalView = view
                         terminalViewRef = view
 
-                        thread {
-                            val ready = alpineManager.setupAlpineEnvironment { status ->
+                        TerminalSessionManager.getOrCreateSession(
+                            context = ctx,
+                            initialPath = initialPath,
+                            onStatusUpdate = { status ->
                                 statusText = status
-                            }
-
-                            if (ready) {
+                            },
+                            onSessionReady = { session ->
+                                currentSession = session
+                                val client = TerminalSessionManager.activeClient
+                                clientRef = client
                                 view.post {
-                                    val session = alpineManager.createAlpineTerminalSession(client, initialPath)
-                                    currentSession = session
+                                    if (client != null) {
+                                        client.terminalView = view
+                                        view.setTerminalViewClient(client)
+                                    }
                                     view.attachSession(session)
-                                    statusText = "Alpine Linux Active"
                                     showKeyboard()
                                 }
-                            } else {
-                                statusText = "Alpine Setup Failed"
                             }
-                        }
+                        )
 
                         view
                     },
@@ -298,7 +298,6 @@ fun TerminalScreen(
     DisposableEffect(Unit) {
         onDispose {
             hideKeyboard()
-            currentSession?.finishIfRunning()
         }
     }
 }

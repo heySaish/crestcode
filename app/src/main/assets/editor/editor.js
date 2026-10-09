@@ -94,6 +94,13 @@ const result = greetCrestUser("Developer");
 
       isReady = true;
 
+      // Add Ctrl+S / Cmd+S save command shortcut
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+        if (window.CrestAndroidBridge && typeof window.CrestAndroidBridge.onSaveRequested === 'function') {
+          window.CrestAndroidBridge.onSaveRequested(editor.getValue());
+        }
+      });
+
       // Update UI Status
       if (statusPill) {
         statusPill.textContent = 'Monaco Active';
@@ -240,6 +247,12 @@ const result = greetCrestUser("Developer");
         cursorPosition: { lineNumber: pos.lineNumber, column: pos.column },
         language: model.getLanguageId()
       };
+    },
+    undo: function() {
+      if (editor) editor.trigger('keyboard', 'undo', null);
+    },
+    redo: function() {
+      if (editor) editor.trigger('keyboard', 'redo', null);
     }
   };
 

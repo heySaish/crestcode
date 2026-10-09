@@ -162,11 +162,24 @@ h1 {
         }
     }
 
-    suspend fun readFileContent(file: File): String = withContext(Dispatchers.IO) {
-        if (file.exists() && file.isFile) {
-            file.readText()
-        } else {
-            ""
+    suspend fun readFileContent(file: File): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            if (file.exists() && file.isFile) {
+                Result.success(file.readText())
+            } else {
+                Result.failure(IllegalArgumentException("File does not exist or is not a file: ${file.path}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun writeFileContent(file: File, content: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            file.writeText(content)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }
