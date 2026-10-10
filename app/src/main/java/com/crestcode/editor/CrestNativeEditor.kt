@@ -6,7 +6,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -18,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -31,18 +31,27 @@ import com.crestcode.ui.theme.*
 @Composable
 fun CrestNativeEditor(
     engine: NativeEditorEngine,
+    activeTabId: String,
     onContentChanged: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val renderState = remember { mutableStateOf(engine.getRenderState()) }
     val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
-    var hiddenTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    var inputFieldValue by remember { mutableStateOf(TextFieldValue(" ")) }
 
     fun refreshState() {
         renderState.value = engine.getRenderState()
         onContentChanged()
+    }
+
+    // Automatically update render state when active tab changes
+    LaunchedEffect(activeTabId) {
+        renderState.value = engine.getRenderState()
+        focusRequester.requestFocus()
+        keyboardController?.show()
     }
 
     val state = renderState.value
@@ -50,15 +59,14 @@ fun CrestNativeEditor(
         engine.getHighlightSpans(0, state.lineCount)
     }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(CrestBackground)
-            .clickable { focusRequester.requestFocus() }
+            .clickable {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
@@ -101,23 +109,29 @@ fun CrestNativeEditor(
                     }
                 } else false
             }
-            .focusRequester(focusRequester)
             .focusable()
     ) {
-        // Hidden TextField for IME keyboard connection
+        // Hidden TextField to connect Android Soft Keyboard (IME)
         BasicTextField(
-            value = hiddenTextFieldValue,
+            value = inputFieldValue,
             onValueChange = { newValue ->
-                val addedText = newValue.text
-                if (addedText.isNotEmpty()) {
-                    engine.insertText(addedText)
-                    hiddenTextFieldValue = TextFieldValue("")
+                val currentText = inputFieldValue.text
+                val newText = newValue.text
+
+                if (newText.length < currentText.length) {
+                    engine.deleteBackspace()
+                    refreshState()
+                } else if (newText.length > currentText.length) {
+                    val added = newText.substring(currentText.length)
+                    engine.insertText(added)
                     refreshState()
                 }
+                // Keep buffer offset stable for IME input
+                inputFieldValue = TextFieldValue(" ")
             },
             modifier = Modifier
                 .size(1.dp)
-                .background(Color.Transparent),
+                .focusRequester(focusRequester),
             cursorBrush = SolidColor(Color.Transparent)
         )
 

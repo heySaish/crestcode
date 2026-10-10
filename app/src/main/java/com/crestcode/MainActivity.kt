@@ -221,6 +221,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 CrestNativeEditor(
                                     engine = viewModel.engine,
+                                    activeTabId = activeTabId,
                                     onContentChanged = {
                                         viewModel.markActiveTabModified(true)
                                     },
