@@ -41,7 +41,7 @@ function calculateTotal(items) {
 
 const cart = [
   { name: "Crest App", price: 0 },
-  { name: "Monaco Engine", price: 0 }
+  { name: "Crest Native Engine", price: 0 }
 ];
 
 console.log("Total:", calculateTotal(cart));""",
@@ -59,7 +59,7 @@ h1 {
             "notes.txt" to """Crest Editor Workspace Notes:
 - High performance Android code editor
 - Real internal storage backed file workspace
-- Powered by Jetpack Compose & Monaco Editor
+- Powered by Jetpack Compose & Crest Native Editor Engine
 - Instant file & language switching"""
         )
 

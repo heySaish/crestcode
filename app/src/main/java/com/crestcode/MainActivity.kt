@@ -1,12 +1,6 @@
 package com.crestcode
 
-import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,10 +16,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.crestcode.core.settings.SettingsManager
-import com.crestcode.editor.MonacoBridge
+import com.crestcode.editor.CrestNativeEditor
 import com.crestcode.runtime.AlpineManager
 import com.crestcode.ui.MainViewModel
 import com.crestcode.ui.TerminalScreen
@@ -39,7 +32,6 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var alpineManager: AlpineManager
     private lateinit var settingsManager: SettingsManager
-    private var webView: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,24 +58,10 @@ class MainActivity : ComponentActivity() {
                 val validationError by viewModel.validationError.collectAsState()
                 val toastMessage by viewModel.toastMessage.collectAsState()
 
-                val monacoBridge = remember {
-                    MonacoBridge(
-                        onContentChangedCallback = { _ ->
-                            viewModel.markActiveTabModified(true)
-                        },
-                        onSaveRequestedCallback = { content ->
-                            val activePath = viewModel.activeTabId.value
-                            if (activePath.isNotEmpty()) {
-                                viewModel.saveContent(context, activePath, content)
-                            }
-                        }
-                    )
-                }
-
                 val workspaceDir = remember { WorkspaceManager.getWorkspaceDir(context) }
 
                 LaunchedEffect(Unit) {
-                    viewModel.loadWorkspace(context, webView)
+                    viewModel.loadWorkspace(context)
                 }
 
                 LaunchedEffect(toastMessage) {
@@ -133,7 +111,7 @@ class MainActivity : ComponentActivity() {
                         confirmButton = {
                             TextButton(
                                 onClick = {
-                                    viewModel.createNewItem(context, webView)
+                                    viewModel.createNewItem(context)
                                 }
                             ) {
                                 Text("Create", color = CrestAccentPrimary)
@@ -163,7 +141,7 @@ class MainActivity : ComponentActivity() {
                                     scope.launch {
                                         drawerState.close()
                                         if (!item.isDirectory) {
-                                            viewModel.openFile(File(item.path), webView)
+                                            viewModel.openFile(File(item.path))
                                         }
                                     }
                                 },
@@ -197,23 +175,23 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     onSaveClick = {
-                                        viewModel.requestSave(context, webView)
+                                        viewModel.requestSave(context)
                                     },
                                     onUndoClick = {
-                                        MonacoBridge.undo(webView)
+                                        viewModel.engine.undo()
                                     },
                                     onRedoClick = {
-                                        MonacoBridge.redo(webView)
+                                        viewModel.engine.redo()
                                     }
                                 )
                                 CrestTabBar(
                                     tabs = openTabs,
                                     activeTabId = activeTabId,
                                     onTabSelect = { tabId ->
-                                        viewModel.openFile(File(tabId), webView)
+                                        viewModel.openFile(File(tabId))
                                     },
                                     onTabClose = { tabId ->
-                                        viewModel.closeTab(tabId, webView)
+                                        viewModel.closeTab(tabId)
                                     }
                                 )
                             }
@@ -241,14 +219,12 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                CrestEditorScreen(
-                                    onWebViewCreated = { wv ->
-                                        webView = wv
-                                        if (activeTabId.isNotEmpty()) {
-                                            viewModel.openFile(File(activeTabId), wv)
-                                        }
+                                CrestNativeEditor(
+                                    engine = viewModel.engine,
+                                    onContentChanged = {
+                                        viewModel.markActiveTabModified(true)
                                     },
-                                    bridge = monacoBridge
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
 
@@ -288,75 +264,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
-
-@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
-@Composable
-fun CrestEditorScreen(
-    onWebViewCreated: (WebView) -> Unit,
-    bridge: Any
-) {
-    val context = LocalContext.current
-    val webView = remember {
-        WebView(context).apply {
-            layoutParams = android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            isFocusable = true
-            isFocusableInTouchMode = true
-
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                allowFileAccess = true
-                allowContentAccess = true
-                useWideViewPort = true
-                loadWithOverviewMode = true
-                setSupportZoom(false)
-                builtInZoomControls = false
-                displayZoomControls = false
-            }
-
-            addJavascriptInterface(bridge, "CrestAndroidBridge")
-
-            webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    consoleMessage?.let {
-                        Log.d("CrestWebView", "[JS Console] ${it.sourceId()}:${it.lineNumber()} -> ${it.message()}")
-                    }
-                    return true
-                }
-            }
-
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    Log.d("CrestWebView", "WebView page finished loading: $url")
-                }
-            }
-
-            setOnTouchListener { v, _ ->
-                if (!v.hasFocus()) {
-                    v.requestFocus()
-                }
-                false
-            }
-
-            loadUrl("file:///android_asset/editor/index.html")
-            onWebViewCreated(this)
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            webView.stopLoading()
-            webView.destroy()
-        }
-    }
-
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { webView }
-    )
 }

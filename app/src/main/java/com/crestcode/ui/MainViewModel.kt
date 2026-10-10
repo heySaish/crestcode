@@ -1,10 +1,9 @@
 package com.crestcode.ui
 
 import android.content.Context
-import android.webkit.WebView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.crestcode.editor.MonacoBridge
+import com.crestcode.editor.NativeEditorEngine
 import com.crestcode.ui.components.CrestTabItem
 import com.crestcode.ui.components.FileTreeItem
 import com.crestcode.workspace.WorkspaceManager
@@ -15,6 +14,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class MainViewModel : ViewModel() {
+
+    val engine = NativeEditorEngine()
 
     private val _fileTreeItems = MutableStateFlow<List<FileTreeItem>>(emptyList())
     val fileTreeItems: StateFlow<List<FileTreeItem>> = _fileTreeItems.asStateFlow()
@@ -51,7 +52,7 @@ class MainViewModel : ViewModel() {
         _toastMessage.value = null
     }
 
-    fun loadWorkspace(context: Context, webView: WebView? = null) {
+    fun loadWorkspace(context: Context) {
         viewModelScope.launch {
             val workspaceDir = WorkspaceManager.getWorkspaceDir(context)
             val items = WorkspaceManager.listFilesRecursively(workspaceDir)
@@ -60,7 +61,7 @@ class MainViewModel : ViewModel() {
             if (_openTabs.value.isEmpty()) {
                 val firstFile = items.firstOrNull { !it.isDirectory }
                 firstFile?.let { item ->
-                    openFile(File(item.path), webView)
+                    openFile(File(item.path))
                 }
             }
         }
@@ -73,7 +74,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun openFile(file: File, webView: WebView?) {
+    fun openFile(file: File) {
         if (file.isDirectory) return
 
         viewModelScope.launch {
@@ -89,23 +90,23 @@ class MainViewModel : ViewModel() {
             _activeTabId.value = path
             _activeLanguage.value = language
 
-            MonacoBridge.openFile(webView, path, content, language)
+            engine.openFile(path, language, content)
         }
     }
 
-    fun closeTab(tabId: String, webView: WebView?) {
+    fun closeTab(tabId: String) {
         val currentTabs = _openTabs.value
         val newTabs = currentTabs.filterNot { it.id == tabId }
         _openTabs.value = newTabs
+        engine.closeFile(tabId)
 
         if (_activeTabId.value == tabId) {
             if (newTabs.isNotEmpty()) {
                 val nextTabFile = File(newTabs.last().id)
-                openFile(nextTabFile, webView)
+                openFile(nextTabFile)
             } else {
                 _activeTabId.value = ""
                 _activeLanguage.value = "-"
-                MonacoBridge.clearEditor(webView)
             }
         }
     }
@@ -139,13 +140,12 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    fun requestSave(context: Context, webView: WebView?) {
+    fun requestSave(context: Context) {
         val currentActive = _activeTabId.value
         if (currentActive.isEmpty()) return
 
-        MonacoBridge.getContent(webView) { content ->
-            saveContent(context, currentActive, content)
-        }
+        val content = engine.getContent()
+        saveContent(context, currentActive, content)
     }
 
     fun setShowTerminal(show: Boolean) {
@@ -171,7 +171,7 @@ class MainViewModel : ViewModel() {
         _validationError.value = WorkspaceManager.validateName(workspaceDir, name)
     }
 
-    fun createNewItem(context: Context, webView: WebView?) {
+    fun createNewItem(context: Context) {
         viewModelScope.launch {
             val workspaceDir = WorkspaceManager.getWorkspaceDir(context)
             val name = _newNameInput.value
@@ -193,11 +193,16 @@ class MainViewModel : ViewModel() {
                 closeCreateDialog()
                 refreshWorkspace(context)
                 if (!createdFile.isDirectory) {
-                    openFile(createdFile, webView)
+                    openFile(createdFile)
                 }
             }.onFailure { ex ->
                 _validationError.value = ex.message ?: "Creation failed."
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        engine.close()
     }
 }
