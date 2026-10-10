@@ -427,172 +427,7 @@ fun CrestNativeEditor(
                             onTextLayout = { textLayoutResult = it }
                         )
 
-                        // 3. Render selection start/end teardrop water-drop handles with drag gestures & zIndex
-                        if (isSelectionActive) {
-                            val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
-                            val lineHeightPx = with(density) { 20.dp.toPx() }
-
-                            if (lineIdx == selStart.line) {
-                                val hStartPx = try { textLayoutResult?.getCursorRect(selStart.character)?.left ?: (selStart.character * fontWidthPx) } catch (t: Throwable) { selStart.character * fontWidthPx }
-                                val hStartDp = with(density) { hStartPx.toDp() }
-                                var startAccumulatedX by remember { mutableStateOf(0f) }
-                                var startAccumulatedY by remember { mutableStateOf(0f) }
-
-                                // Vertical cursor line at selection start
-                                Box(
-                                    modifier = Modifier
-                                        .zIndex(99f)
-                                        .offset(x = hStartDp)
-                                        .width(2.dp)
-                                        .height(18.dp)
-                                        .background(Color.White)
-                                )
-                                // Left teardrop handle (curves down & left) with Initial pass touch drag detection & zIndex
-                                Box(
-                                    modifier = Modifier
-                                        .zIndex(100f)
-                                        .offset(x = hStartDp - 26.dp, y = 18.dp)
-                                        .size(36.dp)
-                                        .pointerInput(lineIdx, state.lineCount) {
-                                            awaitEachGesture {
-                                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                                                android.util.Log.d("CREST_TEMP_HANDLE_LOG", "HANDLE DOWN received")
-                                                down.consume()
-                                                var startAccumulatedX = 0f
-                                                var startAccumulatedY = 0f
-                                                var curLine = selStart.line
-                                                var curChar = selStart.character
-
-                                                while (true) {
-                                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                                    val change = event.changes.firstOrNull() ?: break
-                                                    if (!change.pressed) break
-
-                                                    val dragAmount = change.positionChange()
-                                                    android.util.Log.d(
-                                                        "CREST_TEMP_HANDLE_LOG",
-                                                        "DRAG dx=${dragAmount.x}, dy=${dragAmount.y}"
-                                                    )
-                                                    change.consume()
-
-                                                    startAccumulatedX += dragAmount.x
-                                                    startAccumulatedY += dragAmount.y
-
-                                                    if (lineHeightPx > 0 && kotlin.math.abs(startAccumulatedY) >= lineHeightPx * 0.7f) {
-                                                        val linesMoved = if (startAccumulatedY > 0) 1 else -1
-                                                        startAccumulatedY -= linesMoved * lineHeightPx
-                                                        curLine = (curLine + linesMoved).coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
-                                                    }
-
-                                                    val targetLineText = state.lines.getOrNull(curLine) ?: ""
-                                                    if (fontWidthPx > 0 && kotlin.math.abs(startAccumulatedX) >= fontWidthPx * 0.7f) {
-                                                        val charsMoved = if (startAccumulatedX > 0) 1 else -1
-                                                        startAccumulatedX -= charsMoved * fontWidthPx
-                                                        curChar = (curChar + charsMoved).coerceIn(0, targetLineText.length)
-                                                    }
-
-                                                    if (curLine != selStart.line || curChar != selStart.character) {
-                                                        if (curLine < selEnd.line || (curLine == selEnd.line && curChar <= selEnd.character)) {
-                                                            engine.setSelection(curLine, curChar, selEnd.line, selEnd.character)
-                                                            refreshState()
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    contentAlignment = Alignment.TopEnd
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .background(
-                                                color = CrestAccentPrimary,
-                                                shape = RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 0.dp)
-                                            )
-                                    )
-                                }
-                            }
-                            if (lineIdx == selEnd.line) {
-                                val hEndPx = try { textLayoutResult?.getCursorRect(selEnd.character)?.left ?: (selEnd.character * fontWidthPx) } catch (t: Throwable) { selEnd.character * fontWidthPx }
-                                val hEndDp = with(density) { hEndPx.toDp() }
-
-                                // Vertical cursor line at selection end
-                                Box(
-                                    modifier = Modifier
-                                        .zIndex(99f)
-                                        .offset(x = hEndDp)
-                                        .width(2.dp)
-                                        .height(18.dp)
-                                        .background(Color.White)
-                                )
-                                // Right teardrop handle (curves down & right) with Initial pass touch drag detection & zIndex
-                                Box(
-                                    modifier = Modifier
-                                        .zIndex(100f)
-                                        .offset(x = hEndDp, y = 18.dp)
-                                        .size(36.dp)
-                                        .pointerInput(lineIdx, state.lineCount) {
-                                            awaitEachGesture {
-                                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                                                android.util.Log.d("CREST_TEMP_HANDLE_LOG", "HANDLE DOWN received")
-                                                down.consume()
-                                                var endAccumulatedX = 0f
-                                                var endAccumulatedY = 0f
-                                                var curLine = selEnd.line
-                                                var curChar = selEnd.character
-
-                                                while (true) {
-                                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                                    val change = event.changes.firstOrNull() ?: break
-                                                    if (!change.pressed) break
-
-                                                    val dragAmount = change.positionChange()
-                                                    android.util.Log.d(
-                                                        "CREST_TEMP_HANDLE_LOG",
-                                                        "DRAG dx=${dragAmount.x}, dy=${dragAmount.y}"
-                                                    )
-                                                    change.consume()
-
-                                                    endAccumulatedX += dragAmount.x
-                                                    endAccumulatedY += dragAmount.y
-
-                                                    if (lineHeightPx > 0 && kotlin.math.abs(endAccumulatedY) >= lineHeightPx * 0.7f) {
-                                                        val linesMoved = if (endAccumulatedY > 0) 1 else -1
-                                                        endAccumulatedY -= linesMoved * lineHeightPx
-                                                        curLine = (curLine + linesMoved).coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
-                                                    }
-
-                                                    val targetLineText = state.lines.getOrNull(curLine) ?: ""
-                                                    if (fontWidthPx > 0 && kotlin.math.abs(endAccumulatedX) >= fontWidthPx * 0.7f) {
-                                                        val charsMoved = if (endAccumulatedX > 0) 1 else -1
-                                                        endAccumulatedX -= charsMoved * fontWidthPx
-                                                        curChar = (curChar + charsMoved).coerceIn(0, targetLineText.length)
-                                                    }
-
-                                                    if (curLine != selEnd.line || curChar != selEnd.character) {
-                                                        if (curLine > selStart.line || (curLine == selStart.line && curChar >= selStart.character)) {
-                                                            engine.setSelection(selStart.line, selStart.character, curLine, curChar)
-                                                            refreshState()
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        },
-                                    contentAlignment = Alignment.TopStart
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .background(
-                                                color = CrestAccentPrimary,
-                                                shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 22.dp)
-                                            )
-                                    )
-                                }
-                            }
-                        }
-
-                        // 4. Render cursor indicator precisely at cursor offset
+                        // 3. Render cursor indicator precisely at cursor offset when no selection
                         if (isCurrentLine && !isSelectionActive) {
                             Box(
                                 modifier = Modifier
@@ -602,6 +437,145 @@ fun CrestNativeEditor(
                                     .background(CrestAccentPrimary)
                             )
                         }
+                    }
+                }
+
+                // 4. Floating Selection Handles Overlay Layer (renders on top of all lines)
+                if (isSelectionActive) {
+                    val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
+                    val fontWidthDp = with(density) { fontWidthPx.toDp() }
+                    val lineHeightPx = with(density) { 20.dp.toPx() }
+
+                    // Start Handle (top-left sharp teardrop)
+                    val startLineText = state.lines.getOrNull(selStart.line) ?: ""
+                    val startChar = selStart.character.coerceIn(0, startLineText.length)
+                    val hStartDpX = fontWidthDp * startChar
+                    val hStartDpY = 20.dp * selStart.line
+
+                    // Vertical cursor line at selection start
+                    Box(
+                        modifier = Modifier
+                            .zIndex(99f)
+                            .offset(x = hStartDpX, y = hStartDpY)
+                            .width(2.dp)
+                            .height(20.dp)
+                            .background(Color.White)
+                    )
+                    // Touch hit-box for Start Handle
+                    Box(
+                        modifier = Modifier
+                            .zIndex(100f)
+                            .offset(x = (hStartDpX - 26.dp).coerceAtLeast(0.dp), y = hStartDpY + 18.dp)
+                            .size(40.dp)
+                            .pointerInput(state.lineCount, state.lines) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                    down.consume()
+                                    var currTouchX = with(density) { (hStartDpX).toPx() }
+                                    var currTouchY = with(density) { (hStartDpY + 20.dp).toPx() }
+
+                                    while (true) {
+                                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                        val change = event.changes.firstOrNull() ?: break
+                                        if (!change.pressed) break
+
+                                        val dragAmount = change.positionChange()
+                                        change.consume()
+
+                                        currTouchX += dragAmount.x
+                                        currTouchY += dragAmount.y
+
+                                        val targetLine = (currTouchY / lineHeightPx).toInt().coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
+                                        val targetLineText = state.lines.getOrNull(targetLine) ?: ""
+                                        val targetChar = if (fontWidthPx > 0) {
+                                            (currTouchX / fontWidthPx).toInt().coerceIn(0, targetLineText.length)
+                                        } else 0
+
+                                        if (targetLine != selStart.line || targetChar != selStart.character) {
+                                            if (targetLine < selEnd.line || (targetLine == selEnd.line && targetChar <= selEnd.character)) {
+                                                engine.setSelection(targetLine, targetChar, selEnd.line, selEnd.character)
+                                                renderState.value = engine.getRenderState()
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.TopEnd
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(
+                                    color = CrestAccentPrimary,
+                                    shape = RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 0.dp)
+                                )
+                        )
+                    }
+
+                    // End Handle (top-right sharp teardrop)
+                    val endLineText = state.lines.getOrNull(selEnd.line) ?: ""
+                    val endChar = selEnd.character.coerceIn(0, endLineText.length)
+                    val hEndDpX = fontWidthDp * endChar
+                    val hEndDpY = 20.dp * selEnd.line
+
+                    // Vertical cursor line at selection end
+                    Box(
+                        modifier = Modifier
+                            .zIndex(99f)
+                            .offset(x = hEndDpX, y = hEndDpY)
+                            .width(2.dp)
+                            .height(20.dp)
+                            .background(Color.White)
+                    )
+                    // Touch hit-box for End Handle
+                    Box(
+                        modifier = Modifier
+                            .zIndex(100f)
+                            .offset(x = hEndDpX, y = hEndDpY + 18.dp)
+                            .size(40.dp)
+                            .pointerInput(state.lineCount, state.lines) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                    down.consume()
+                                    var currTouchX = with(density) { (hEndDpX).toPx() }
+                                    var currTouchY = with(density) { (hEndDpY + 20.dp).toPx() }
+
+                                    while (true) {
+                                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                        val change = event.changes.firstOrNull() ?: break
+                                        if (!change.pressed) break
+
+                                        val dragAmount = change.positionChange()
+                                        change.consume()
+
+                                        currTouchX += dragAmount.x
+                                        currTouchY += dragAmount.y
+
+                                        val targetLine = (currTouchY / lineHeightPx).toInt().coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
+                                        val targetLineText = state.lines.getOrNull(targetLine) ?: ""
+                                        val targetChar = if (fontWidthPx > 0) {
+                                            (currTouchX / fontWidthPx).toInt().coerceIn(0, targetLineText.length)
+                                        } else 0
+
+                                        if (targetLine != selEnd.line || targetChar != selEnd.character) {
+                                            if (targetLine > selStart.line || (targetLine == selStart.line && targetChar >= selStart.character)) {
+                                                engine.setSelection(selStart.line, selStart.character, targetLine, targetChar)
+                                                renderState.value = engine.getRenderState()
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.TopStart
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(
+                                    color = CrestAccentPrimary,
+                                    shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 22.dp)
+                                )
+                        )
                     }
                 }
 
