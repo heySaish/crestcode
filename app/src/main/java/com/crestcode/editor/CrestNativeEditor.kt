@@ -7,6 +7,8 @@ import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -24,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -443,25 +447,31 @@ fun CrestNativeEditor(
                                         .height(18.dp)
                                         .background(Color.White)
                                 )
-                                // Left teardrop handle (curves down & left) with touch drag detection & zIndex
+                                // Left teardrop handle (curves down & left) with Initial pass touch drag detection & zIndex
                                 Box(
                                     modifier = Modifier
                                         .zIndex(100f)
                                         .offset(x = hStartDp - 26.dp, y = 18.dp)
                                         .size(36.dp)
                                         .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    startAccumulatedX = 0f
-                                                    startAccumulatedY = 0f
-                                                },
-                                                onDrag = { change, dragAmount ->
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                                down.consume()
+                                                var startAccumulatedX = 0f
+                                                var startAccumulatedY = 0f
+                                                var curLine = selStart.line
+                                                var curChar = selStart.character
+
+                                                while (true) {
+                                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                                    val change = event.changes.firstOrNull() ?: break
+                                                    if (!change.pressed) break
+
+                                                    val dragAmount = change.positionChange()
                                                     change.consume()
+
                                                     startAccumulatedX += dragAmount.x
                                                     startAccumulatedY += dragAmount.y
-
-                                                    var curLine = selStart.line
-                                                    var curChar = selStart.character
 
                                                     if (lineHeightPx > 0 && kotlin.math.abs(startAccumulatedY) >= lineHeightPx * 0.7f) {
                                                         val linesMoved = if (startAccumulatedY > 0) 1 else -1
@@ -483,7 +493,7 @@ fun CrestNativeEditor(
                                                         }
                                                     }
                                                 }
-                                            )
+                                            }
                                         },
                                     contentAlignment = Alignment.TopEnd
                                 ) {
@@ -500,8 +510,6 @@ fun CrestNativeEditor(
                             if (lineIdx == selEnd.line) {
                                 val hEndPx = try { textLayoutResult?.getCursorRect(selEnd.character)?.left ?: (selEnd.character * fontWidthPx) } catch (t: Throwable) { selEnd.character * fontWidthPx }
                                 val hEndDp = with(density) { hEndPx.toDp() }
-                                var endAccumulatedX by remember { mutableStateOf(0f) }
-                                var endAccumulatedY by remember { mutableStateOf(0f) }
 
                                 // Vertical cursor line at selection end
                                 Box(
@@ -512,25 +520,31 @@ fun CrestNativeEditor(
                                         .height(18.dp)
                                         .background(Color.White)
                                 )
-                                // Right teardrop handle (curves down & right) with touch drag detection & zIndex
+                                // Right teardrop handle (curves down & right) with Initial pass touch drag detection & zIndex
                                 Box(
                                     modifier = Modifier
                                         .zIndex(100f)
                                         .offset(x = hEndDp, y = 18.dp)
                                         .size(36.dp)
                                         .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    endAccumulatedX = 0f
-                                                    endAccumulatedY = 0f
-                                                },
-                                                onDrag = { change, dragAmount ->
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                                down.consume()
+                                                var endAccumulatedX = 0f
+                                                var endAccumulatedY = 0f
+                                                var curLine = selEnd.line
+                                                var curChar = selEnd.character
+
+                                                while (true) {
+                                                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                                    val change = event.changes.firstOrNull() ?: break
+                                                    if (!change.pressed) break
+
+                                                    val dragAmount = change.positionChange()
                                                     change.consume()
+
                                                     endAccumulatedX += dragAmount.x
                                                     endAccumulatedY += dragAmount.y
-
-                                                    var curLine = selEnd.line
-                                                    var curChar = selEnd.character
 
                                                     if (lineHeightPx > 0 && kotlin.math.abs(endAccumulatedY) >= lineHeightPx * 0.7f) {
                                                         val linesMoved = if (endAccumulatedY > 0) 1 else -1
@@ -552,7 +566,7 @@ fun CrestNativeEditor(
                                                         }
                                                     }
                                                 }
-                                            )
+                                            }
                                         },
                                     contentAlignment = Alignment.TopStart
                                 ) {
