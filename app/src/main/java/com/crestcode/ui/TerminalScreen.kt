@@ -309,8 +309,8 @@ fun TerminalScreen(
                             val ch = key[0]
                             if (ctrl) {
                                 val codePoint = when {
-                                    ch in 'a'..'z' -> (ch - 'a' + 1).code
-                                    ch in 'A'..'Z' -> (ch - 'A' + 1).code
+                                    ch in 'a'..'z' -> (ch - 'a' + 1
+                                    ch in 'A'..'Z' -> (ch - 'A' + 1
                                     else -> ch.code
                                 }
                                 currentSession?.writeCodePoint(alt, codePoint)

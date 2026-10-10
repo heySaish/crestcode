@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                 val activeTabId by viewModel.activeTabId.collectAsState()
                 val activeLanguage by viewModel.activeLanguage.collectAsState()
                 val showTerminal by viewModel.showTerminal.collectAsState()
+                var keyboardToggleTrigger by remember { mutableStateOf(0) }
 
                 val showCreateDialog by viewModel.showCreateDialog.collectAsState()
                 val isFolderCreation by viewModel.isFolderCreation.collectAsState()
@@ -199,7 +200,6 @@ class MainActivity : ComponentActivity() {
                         },
                         bottomBar = {
                             var isCtrlActive by remember { mutableStateOf(false) }
-                            var keyboardToggleTrigger by remember { mutableStateOf(0) }
                             val clipboardManager = remember {
                                 context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                             }
