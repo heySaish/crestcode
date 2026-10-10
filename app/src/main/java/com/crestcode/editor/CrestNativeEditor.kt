@@ -103,11 +103,6 @@ fun CrestNativeEditor(
                             refreshState()
                             true
                         }
-                        Key.Backspace -> {
-                            engine.deleteBackspace()
-                            refreshState()
-                            true
-                        }
                         Key.Enter -> {
                             engine.insertText("\n")
                             refreshState()
@@ -131,24 +126,34 @@ fun CrestNativeEditor(
             value = inputFieldValue,
             onValueChange = { newValue ->
                 val newText = newValue.text
+                val currentText = inputFieldValue.text
 
-                if (newText.length < IME_SENTINEL_COUNT) {
+                if (newText.length < currentText.length) {
                     // Backspace pressed (supports holding delete key continuously)
-                    val deletedCount = IME_SENTINEL_COUNT - newText.length
+                    val deletedCount = currentText.length - newText.length
                     repeat(deletedCount) {
                         engine.deleteBackspace()
                     }
                     refreshState()
-                } else if (newText.length > IME_SENTINEL_COUNT) {
+
+                    if (newText.isEmpty()) {
+                        // Sentinel buffer depleted, reset buffer
+                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
+                    } else {
+                        // Preserve natural IME cursor selection so Gboard auto-repeat isn't cancelled
+                        inputFieldValue = newValue
+                    }
+                } else if (newText.length > currentText.length) {
                     // Text typed / pasted
-                    val added = newText.substring(IME_SENTINEL_COUNT).replace(IME_SENTINEL_CHAR, "")
+                    val added = newText.substring(currentText.length).replace(IME_SENTINEL_CHAR, "")
                     if (added.isNotEmpty()) {
                         engine.insertText(added)
                         refreshState()
                     }
+                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
+                } else {
+                    inputFieldValue = newValue
                 }
-                // Always reset IME sentinel buffer state so Gboard hold-to-delete auto-repeats continuously
-                inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
             },
             modifier = Modifier
                 .size(1.dp)
