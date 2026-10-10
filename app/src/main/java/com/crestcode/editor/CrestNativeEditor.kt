@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.crestcode.ui.theme.*
 
-private const val IME_SENTINEL = "\u200B"
+private const val IME_SENTINEL_CHAR = "\u200B"
+private const val IME_SENTINEL_COUNT = 50
+private val IME_SENTINEL_TEXT = IME_SENTINEL_CHAR.repeat(IME_SENTINEL_COUNT)
 
 @Composable
 fun CrestNativeEditor(
@@ -49,8 +51,9 @@ fun CrestNativeEditor(
     val horizontalScroll = rememberScrollState()
     val density = LocalDensity.current
 
+    var lastSentinelLen by remember { mutableStateOf(IME_SENTINEL_COUNT) }
     var inputFieldValue by remember {
-        mutableStateOf(TextFieldValue(IME_SENTINEL, TextRange(IME_SENTINEL.length)))
+        mutableStateOf(TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT)))
     }
 
     fun refreshState() {
@@ -70,7 +73,7 @@ fun CrestNativeEditor(
         engine.getHighlightSpans(0, state.lineCount)
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(CrestBackground)
@@ -122,30 +125,38 @@ fun CrestNativeEditor(
             }
             .focusable()
     ) {
+        val minEditorWidth = maxWidth
+
         // Hidden TextField to connect Android Soft Keyboard (IME)
         BasicTextField(
             value = inputFieldValue,
             onValueChange = { newValue ->
                 val newText = newValue.text
 
-                if (newText.length < 1) {
-                    engine.deleteBackspace()
-                    refreshState()
-                } else if (newText.length > 1) {
-                    val added = if (newText.startsWith(IME_SENTINEL)) {
-                        newText.substring(IME_SENTINEL.length)
-                    } else if (newText.endsWith(IME_SENTINEL)) {
-                        newText.substring(0, newText.length - IME_SENTINEL.length)
-                    } else {
-                        newText.replace(IME_SENTINEL, "")
+                if (newText.length < lastSentinelLen) {
+                    // Backspace pressed (supports holding delete key continuously)
+                    val deletedCount = lastSentinelLen - newText.length
+                    repeat(deletedCount) {
+                        engine.deleteBackspace()
                     }
+                    refreshState()
+                    lastSentinelLen = newText.length
+
+                    // Top up sentinel buffer when running low to sustain hold-to-delete
+                    if (lastSentinelLen < 10) {
+                        lastSentinelLen = IME_SENTINEL_COUNT
+                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
+                    }
+                } else if (newText.length > lastSentinelLen) {
+                    // Text typed / pasted
+                    val added = newText.substring(lastSentinelLen).replace(IME_SENTINEL_CHAR, "")
                     if (added.isNotEmpty()) {
                         engine.insertText(added)
                         refreshState()
                     }
+                    lastSentinelLen = IME_SENTINEL_COUNT
+                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
                 }
-                // Reset IME sentinel buffer to keep IME selection offset stable
-                inputFieldValue = TextFieldValue(IME_SENTINEL, TextRange(IME_SENTINEL.length))
             },
             modifier = Modifier
                 .size(1.dp)
@@ -158,10 +169,10 @@ fun CrestNativeEditor(
                 .fillMaxSize()
                 .verticalScroll(verticalScroll)
         ) {
-            // Line Numbers Column
+            // Line Numbers Column (clean transparent background, no box highlight)
             Column(
                 modifier = Modifier
-                    .background(CrestSurfaceHeader)
+                    .background(Color.Transparent)
                     .padding(vertical = 8.dp, horizontal = 12.dp)
             ) {
                 for (i in 1..state.lineCount.coerceAtLeast(1)) {
@@ -185,12 +196,13 @@ fun CrestNativeEditor(
                 }
             }
 
-            // Code Text Content Area
+            // Code Text Content Area (full width line selection support)
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .horizontalScroll(horizontalScroll)
                     .padding(vertical = 8.dp, horizontal = 12.dp)
+                    .widthIn(min = minEditorWidth)
             ) {
                 for (lineIdx in 0 until state.lineCount.coerceAtLeast(1)) {
                     val lineText = state.lines.getOrNull(lineIdx) ?: ""
@@ -271,6 +283,21 @@ fun CrestNativeEditor(
                         }
                     }
                 }
+
+                // Blank space below code lines - tapping sets cursor to last line end
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clickable {
+                            val lastLineIdx = (state.lineCount - 1).coerceAtLeast(0)
+                            val lastLineText = state.lines.getOrNull(lastLineIdx) ?: ""
+                            engine.setCursor(lastLineIdx, lastLineText.length)
+                            refreshState()
+                            focusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
+                )
             }
         }
     }
