@@ -18,6 +18,7 @@ pub struct RenderState {
     pub can_undo: bool,
     pub can_redo: bool,
     pub is_modified: bool,
+    pub matching_brackets: Option<(Position, Position)>,
 }
 
 pub struct EditorEngine {
@@ -91,7 +92,39 @@ impl EditorEngine {
         let end_pos = selection_before.end();
         let text_before = doc.buffer.get_text_range(start_pos, end_pos);
 
-        let change = doc.apply_insert(text);
+        // 1. Overtype / skip closing bracket if character after cursor is already the matching closing bracket
+        if text.len() == 1 && selection_before.is_empty() {
+            let ch = text.chars().next().unwrap();
+            if matches!(ch, ')' | '}' | ']' | '"' | '\'') {
+                if let Some(line_str) = doc.buffer.get_line(start_pos.line) {
+                    let chars: Vec<char> = line_str.chars().collect();
+                    if start_pos.character < chars.len() && chars[start_pos.character] == ch {
+                        let next_pos = Position::new(start_pos.line, start_pos.character + 1);
+                        doc.selection = Selection::new(next_pos, next_pos);
+                        return None;
+                    }
+                }
+            }
+        }
+
+        // 2. Auto-closing pair insertion for (, {, [, ", '
+        let insert_str = match text {
+            "(" => "()",
+            "{" => "{}",
+            "[" => "[]",
+            "\"" => "\"\"",
+            "'" => "''",
+            _ => text,
+        };
+        let is_auto_pair = insert_str.len() == 2 && text.len() == 1 && selection_before.is_empty();
+
+        let change = doc.apply_insert(insert_str);
+
+        if is_auto_pair {
+            let mid_pos = Position::new(start_pos.line, start_pos.character + 1);
+            doc.selection = Selection::new(mid_pos, mid_pos);
+        }
+
         let selection_after = doc.selection;
 
         let history = self.histories.get_mut(&active_uri)?;
@@ -100,7 +133,7 @@ impl EditorEngine {
             end_before: end_pos,
             end_after: change.end,
             text_before,
-            text_after: text.to_string(),
+            text_after: insert_str.to_string(),
             selection_before,
             selection_after,
         });
@@ -122,8 +155,31 @@ impl EditorEngine {
 
         let selection_before = doc.selection;
         let start_pos = selection_before.start();
-        let end_pos = selection_before.end();
-        let text_before = if selection_before.is_empty() {
+
+        // Check if cursor is directly between an auto-closed pair like (), {}, [], "", ''
+        if selection_before.is_empty() && start_pos.character > 0 {
+            if let Some(line_str) = doc.buffer.get_line(start_pos.line) {
+                let chars: Vec<char> = line_str.chars().collect();
+                if start_pos.character < chars.len() {
+                    let prev_ch = chars[start_pos.character - 1];
+                    let next_ch = chars[start_pos.character];
+                    let is_pair = matches!(
+                        (prev_ch, next_ch),
+                        ('(', ')') | ('{', '}') | ('[', ']') | ('"', '"') | ('\'', '\'')
+                    );
+                    if is_pair {
+                        // Expand selection to cover both characters so apply_delete_backspace erases both
+                        doc.selection = Selection::new(
+                            Position::new(start_pos.line, start_pos.character - 1),
+                            Position::new(start_pos.line, start_pos.character + 1),
+                        );
+                    }
+                }
+            }
+        }
+
+        let current_sel = doc.selection;
+        let text_before = if current_sel.is_empty() {
             if start_pos.line == 0 && start_pos.character == 0 {
                 return None;
             }
@@ -135,7 +191,7 @@ impl EditorEngine {
             };
             doc.buffer.get_text_range(del_start, start_pos)
         } else {
-            doc.buffer.get_text_range(start_pos, end_pos)
+            doc.buffer.get_text_range(current_sel.start(), current_sel.end())
         };
 
         let change = doc.apply_delete_backspace()?;
@@ -303,6 +359,7 @@ impl EditorEngine {
         let doc = self.get_active_document()?;
         let uri = doc.uri.clone();
         let history = self.histories.get(&uri);
+        let matching_brackets = doc.buffer.find_matching_bracket(doc.selection.head);
 
         Some(RenderState {
             uri: doc.uri.clone(),
@@ -316,6 +373,7 @@ impl EditorEngine {
             can_undo: history.map(|h| h.can_undo()).unwrap_or(false),
             can_redo: history.map(|h| h.can_redo()).unwrap_or(false),
             is_modified: doc.is_modified,
+            matching_brackets,
         })
     }
 

@@ -112,19 +112,29 @@ mod tests {
     }
 
     #[test]
-    fn test_continuous_backspace_hold_simulation() {
+    fn test_auto_closing_pairs_and_bracket_matching() {
         let mut engine = EditorEngine::new();
-        engine.open_document("file:///test.txt", "plaintext", "body {\n  font-family: system-ui;\n}");
+        engine.open_document("file:///test.rs", "rust", "fn test");
 
-        // Move cursor to line 1 character 25 (end of line)
-        engine.set_selection(Position::new(1, 25), Position::new(1, 25));
+        // Move cursor to end of line
+        engine.set_selection(Position::new(0, 7), Position::new(0, 7));
 
-        // Simulate holding backspace 15 times
-        for _ in 0..15 {
-            engine.delete_backspace();
-        }
+        // Insert opening bracket '(' -> should auto-close to '()'
+        engine.insert_text("(");
+        let doc = engine.get_active_document().unwrap();
+        assert_eq!(doc.buffer.get_line(0), Some("fn test()"));
+        assert_eq!(doc.selection.head, Position::new(0, 8)); // Cursor inside ()
 
-        let text = engine.get_active_document().unwrap().buffer.get_text();
-        assert_eq!(text, "body {\n  font-fam\n}");
+        // Verify bracket matching detects (0,7) and (0,8)
+        let brackets = doc.buffer.find_matching_bracket(Position::new(0, 8));
+        assert!(brackets.is_some());
+        let (open_pos, close_pos) = brackets.unwrap();
+        assert_eq!(open_pos, Position::new(0, 7));
+        assert_eq!(close_pos, Position::new(0, 8));
+
+        // Delete backspace between () -> should erase both ( and )
+        engine.delete_backspace();
+        let doc_after = engine.get_active_document().unwrap();
+        assert_eq!(doc_after.buffer.get_line(0), Some("fn test"));
     }
 }

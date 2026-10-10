@@ -15,7 +15,8 @@ data class RenderState(
     val selection: EditorSelection,
     val canUndo: Boolean,
     val canRedo: Boolean,
-    val isModified: Boolean
+    val isModified: Boolean,
+    val matchingBrackets: Pair<EditorPosition, EditorPosition>? = null
 )
 
 data class CompletionItem(
@@ -196,6 +197,20 @@ class NativeEditorEngine : AutoCloseable {
                         EditorPosition(headObj.getInt("line"), headObj.getInt("character"))
                     )
 
+                    val matchingBrackets = if (obj.has("matching_brackets") && !obj.isNull("matching_brackets")) {
+                        try {
+                            val mbArr = obj.getJSONArray("matching_brackets")
+                            val openObj = mbArr.getJSONObject(0)
+                            val closeObj = mbArr.getJSONObject(1)
+                            Pair(
+                                EditorPosition(openObj.getInt("line"), openObj.getInt("character")),
+                                EditorPosition(closeObj.getInt("line"), closeObj.getInt("character"))
+                            )
+                        } catch (t: Throwable) {
+                            null
+                        }
+                    } else null
+
                     return RenderState(
                         uri = obj.optString("uri", ""),
                         languageId = obj.optString("language_id", "plaintext"),
@@ -205,7 +220,8 @@ class NativeEditorEngine : AutoCloseable {
                         selection = selection,
                         canUndo = obj.optBoolean("can_undo", false),
                         canRedo = obj.optBoolean("can_redo", false),
-                        isModified = obj.optBoolean("is_modified", false)
+                        isModified = obj.optBoolean("is_modified", false),
+                        matchingBrackets = matchingBrackets
                     )
                 } catch (e: Exception) {
                     safeLogE("NativeEditorEngine", "Error parsing render state JSON", e)

@@ -203,4 +203,84 @@ impl TextBuffer {
             result_lines.join("\n")
         }
     }
+
+    /// Find matching bracket pair for position near a bracket character.
+    pub fn find_matching_bracket(&self, pos: Position) -> Option<(Position, Position)> {
+        if self.lines.is_empty() {
+            return None;
+        }
+        let line_idx = pos.line.min(self.lines.len() - 1);
+        let line_str = self.get_line(line_idx)?;
+        let chars: Vec<char> = line_str.chars().collect();
+        let char_idx = pos.character.min(chars.len());
+
+        let (target_char, target_pos) = if char_idx > 0 && is_bracket(chars[char_idx - 1]) {
+            (chars[char_idx - 1], Position::new(line_idx, char_idx - 1))
+        } else if char_idx < chars.len() && is_bracket(chars[char_idx]) {
+            (chars[char_idx], Position::new(line_idx, char_idx))
+        } else {
+            return None;
+        };
+
+        let matching_char = get_matching_bracket(target_char)?;
+        let is_opening = is_opening_bracket(target_char);
+
+        if is_opening {
+            let mut depth = 0;
+            for l in target_pos.line..self.lines.len() {
+                let l_str = self.get_line(l)?;
+                let start_c = if l == target_pos.line { target_pos.character } else { 0 };
+                for (c_idx, ch) in l_str.chars().enumerate().skip(start_c) {
+                    if ch == target_char {
+                        depth += 1;
+                    } else if ch == matching_char {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some((target_pos, Position::new(l, c_idx)));
+                        }
+                    }
+                }
+            }
+        } else {
+            let mut depth = 0;
+            for l in (0..=target_pos.line).rev() {
+                let l_str = self.get_line(l)?;
+                let c_vec: Vec<char> = l_str.chars().collect();
+                let start_c = if l == target_pos.line { target_pos.character } else { c_vec.len().saturating_sub(1) };
+                for c_idx in (0..=start_c.min(c_vec.len().saturating_sub(1))).rev() {
+                    let ch = c_vec[c_idx];
+                    if ch == target_char {
+                        depth += 1;
+                    } else if ch == matching_char {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some((Position::new(l, c_idx), target_pos));
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
+fn is_bracket(ch: char) -> bool {
+    matches!(ch, '(' | ')' | '{' | '}' | '[' | ']')
+}
+
+fn is_opening_bracket(ch: char) -> bool {
+    matches!(ch, '(' | '{' | '[')
+}
+
+fn get_matching_bracket(ch: char) -> Option<char> {
+    match ch {
+        '(' => Some(')'),
+        ')' => Some('('),
+        '{' => Some('}'),
+        '}' => Some('{'),
+        '[' => Some(']'),
+        ']' => Some('['),
+        _ => None,
+    }
 }

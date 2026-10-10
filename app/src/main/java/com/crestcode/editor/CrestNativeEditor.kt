@@ -3,12 +3,13 @@ package com.crestcode.editor
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -74,8 +75,10 @@ fun CrestNativeEditor(
         modifier = modifier
             .fillMaxSize()
             .background(CrestBackground)
-            .clickable {
-                requestInputFocus()
+            .pointerInput(Unit) {
+                detectTapGestures {
+                    requestInputFocus()
+                }
             }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
@@ -154,12 +157,14 @@ fun CrestNativeEditor(
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier
                             .height(20.dp)
-                            .clickable {
-                                val targetLineText = state.lines.getOrNull(lineIdx) ?: ""
-                                val targetChar = state.cursor.character.coerceIn(0, targetLineText.length)
-                                engine.setCursor(lineIdx, targetChar)
-                                refreshState()
-                                requestInputFocus()
+                            .pointerInput(lineIdx) {
+                                detectTapGestures {
+                                    val targetLineText = state.lines.getOrNull(lineIdx) ?: ""
+                                    val targetChar = state.cursor.character.coerceIn(0, targetLineText.length)
+                                    engine.setCursor(lineIdx, targetChar)
+                                    refreshState()
+                                    requestInputFocus()
+                                }
                             }
                     )
                 }
@@ -191,6 +196,16 @@ fun CrestNativeEditor(
                         } else 0f
                     }
                     val cursorOffsetDp = with(density) { cursorOffsetPx.toDp() }
+
+                    // Bracket pair positions on this line
+                    val bracketsOnThisLine = remember(state.matchingBrackets, lineIdx, lineText) {
+                        val list = mutableListOf<Int>()
+                        state.matchingBrackets?.let { (openPos, closePos) ->
+                            if (openPos.line == lineIdx && openPos.character < lineText.length) list.add(openPos.character)
+                            if (closePos.line == lineIdx && closePos.character < lineText.length) list.add(closePos.character)
+                        }
+                        list
+                    }
 
                     Box(
                         modifier = Modifier
@@ -239,6 +254,40 @@ fun CrestNativeEditor(
                             }
                         }
 
+                        // Matching bracket highlights (hitbox box style)
+                        for (bChar in bracketsOnThisLine) {
+                            val bracketOffsetPx = remember(textLayoutResult, bChar) {
+                                if (textLayoutResult != null && bChar < lineText.length) {
+                                    try {
+                                        textLayoutResult?.getCursorRect(bChar)?.left ?: 0f
+                                    } catch (t: Throwable) { 0f }
+                                } else 0f
+                            }
+                            val fontWidthPx = 13.sp.toPx() * 0.6f
+                            val charWidthDp = with(density) {
+                                try {
+                                    (textLayoutResult?.getCursorRect(bChar)?.width ?: fontWidthPx).toDp()
+                                } catch (t: Throwable) { fontWidthPx.toDp() }
+                            }
+                            val bracketOffsetDp = with(density) { bracketOffsetPx.toDp() }
+
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = bracketOffsetDp)
+                                    .width(charWidthDp.coerceAtLeast(8.dp))
+                                    .height(18.dp)
+                                    .background(
+                                        color = CrestAccentPrimary.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = CrestAccentPrimary,
+                                        shape = RoundedCornerShape(3.dp)
+                                    )
+                            )
+                        }
+
                         Text(
                             text = annotatedText,
                             fontSize = 13.sp,
@@ -265,12 +314,14 @@ fun CrestNativeEditor(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp)
-                        .clickable {
-                            val lastLineIdx = (state.lineCount - 1).coerceAtLeast(0)
-                            val lastLineText = state.lines.getOrNull(lastLineIdx) ?: ""
-                            engine.setCursor(lastLineIdx, lastLineText.length)
-                            refreshState()
-                            requestInputFocus()
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                val lastLineIdx = (state.lineCount - 1).coerceAtLeast(0)
+                                val lastLineText = state.lines.getOrNull(lastLineIdx) ?: ""
+                                engine.setCursor(lastLineIdx, lastLineText.length)
+                                refreshState()
+                                requestInputFocus()
+                            }
                         }
                 )
             }
