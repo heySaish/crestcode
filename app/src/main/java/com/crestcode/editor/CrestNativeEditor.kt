@@ -453,7 +453,7 @@ fun CrestNativeEditor(
                                         .zIndex(100f)
                                         .offset(x = hStartDp - 26.dp, y = 18.dp)
                                         .size(36.dp)
-                                        .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
+                                        .pointerInput(lineIdx, state.lineCount) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown(pass = PointerEventPass.Initial)
                                                 down.consume()
@@ -526,7 +526,7 @@ fun CrestNativeEditor(
                                         .zIndex(100f)
                                         .offset(x = hEndDp, y = 18.dp)
                                         .size(36.dp)
-                                        .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
+                                        .pointerInput(lineIdx, state.lineCount) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown(pass = PointerEventPass.Initial)
                                                 down.consume()
