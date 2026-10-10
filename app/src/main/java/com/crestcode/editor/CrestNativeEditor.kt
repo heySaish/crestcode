@@ -456,6 +456,7 @@ fun CrestNativeEditor(
                                         .pointerInput(lineIdx, state.lineCount) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                                android.util.Log.d("CREST_TEMP_HANDLE_LOG", "HANDLE DOWN received")
                                                 down.consume()
                                                 var startAccumulatedX = 0f
                                                 var startAccumulatedY = 0f
@@ -468,6 +469,10 @@ fun CrestNativeEditor(
                                                     if (!change.pressed) break
 
                                                     val dragAmount = change.positionChange()
+                                                    android.util.Log.d(
+                                                        "CREST_TEMP_HANDLE_LOG",
+                                                        "DRAG dx=${dragAmount.x}, dy=${dragAmount.y}"
+                                                    )
                                                     change.consume()
 
                                                     startAccumulatedX += dragAmount.x
@@ -529,6 +534,7 @@ fun CrestNativeEditor(
                                         .pointerInput(lineIdx, state.lineCount) {
                                             awaitEachGesture {
                                                 val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                                android.util.Log.d("CREST_TEMP_HANDLE_LOG", "HANDLE DOWN received")
                                                 down.consume()
                                                 var endAccumulatedX = 0f
                                                 var endAccumulatedY = 0f
@@ -541,6 +547,10 @@ fun CrestNativeEditor(
                                                     if (!change.pressed) break
 
                                                     val dragAmount = change.positionChange()
+                                                    android.util.Log.d(
+                                                        "CREST_TEMP_HANDLE_LOG",
+                                                        "DRAG dx=${dragAmount.x}, dy=${dragAmount.y}"
+                                                    )
                                                     change.consume()
 
                                                     endAccumulatedX += dragAmount.x
