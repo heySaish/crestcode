@@ -26,10 +26,12 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Set up Android NDK
-        uses: npathai/setup-ndk@v2
-        with:
-          ndk-version: r25c
+      - name: Set up Android NDK Environment
+        run: |
+          NDK_PATH=$(ls -d $ANDROID_HOME/ndk/* | tail -n 1)
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "Found Android NDK at: $NDK_PATH"
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk || true
