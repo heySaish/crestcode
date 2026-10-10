@@ -21,6 +21,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
@@ -422,39 +423,62 @@ fun CrestNativeEditor(
                             onTextLayout = { textLayoutResult = it }
                         )
 
-                        // 3. Render selection start/end teardrop water-drop handles with drag gestures
+                        // 3. Render selection start/end teardrop water-drop handles with drag gestures & zIndex
                         if (isSelectionActive) {
                             val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
+                            val lineHeightPx = with(density) { 20.dp.toPx() }
+
                             if (lineIdx == selStart.line) {
                                 val hStartPx = try { textLayoutResult?.getCursorRect(selStart.character)?.left ?: (selStart.character * fontWidthPx) } catch (t: Throwable) { selStart.character * fontWidthPx }
                                 val hStartDp = with(density) { hStartPx.toDp() }
                                 var startAccumulatedX by remember { mutableStateOf(0f) }
+                                var startAccumulatedY by remember { mutableStateOf(0f) }
 
                                 // Vertical cursor line at selection start
                                 Box(
                                     modifier = Modifier
+                                        .zIndex(99f)
                                         .offset(x = hStartDp)
                                         .width(2.dp)
                                         .height(18.dp)
                                         .background(Color.White)
                                 )
-                                // Left teardrop handle (curves down & left) with touch drag detection
+                                // Left teardrop handle (curves down & left) with touch drag detection & zIndex
                                 Box(
                                     modifier = Modifier
-                                        .offset(x = hStartDp - 20.dp, y = 18.dp)
-                                        .size(28.dp)
-                                        .pointerInput(lineIdx, selStart, selEnd) {
+                                        .zIndex(100f)
+                                        .offset(x = hStartDp - 26.dp, y = 18.dp)
+                                        .size(36.dp)
+                                        .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
                                             detectDragGestures(
-                                                onDragStart = { startAccumulatedX = 0f },
+                                                onDragStart = {
+                                                    startAccumulatedX = 0f
+                                                    startAccumulatedY = 0f
+                                                },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
                                                     startAccumulatedX += dragAmount.x
-                                                    if (fontWidthPx > 0 && kotlin.math.abs(startAccumulatedX) >= fontWidthPx) {
-                                                        val charsMoved = (startAccumulatedX / fontWidthPx).toInt()
+                                                    startAccumulatedY += dragAmount.y
+
+                                                    var curLine = selStart.line
+                                                    var curChar = selStart.character
+
+                                                    if (lineHeightPx > 0 && kotlin.math.abs(startAccumulatedY) >= lineHeightPx * 0.7f) {
+                                                        val linesMoved = if (startAccumulatedY > 0) 1 else -1
+                                                        startAccumulatedY -= linesMoved * lineHeightPx
+                                                        curLine = (curLine + linesMoved).coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
+                                                    }
+
+                                                    val targetLineText = state.lines.getOrNull(curLine) ?: ""
+                                                    if (fontWidthPx > 0 && kotlin.math.abs(startAccumulatedX) >= fontWidthPx * 0.7f) {
+                                                        val charsMoved = if (startAccumulatedX > 0) 1 else -1
                                                         startAccumulatedX -= charsMoved * fontWidthPx
-                                                        val newChar = (selStart.character + charsMoved).coerceIn(0, lineText.length)
-                                                        if (newChar != selStart.character && newChar <= selEnd.character) {
-                                                            engine.setSelection(lineIdx, newChar, selEnd.line, selEnd.character)
+                                                        curChar = (curChar + charsMoved).coerceIn(0, targetLineText.length)
+                                                    }
+
+                                                    if (curLine != selStart.line || curChar != selStart.character) {
+                                                        if (curLine < selEnd.line || (curLine == selEnd.line && curChar <= selEnd.character)) {
+                                                            engine.setSelection(curLine, curChar, selEnd.line, selEnd.character)
                                                             refreshState()
                                                         }
                                                     }
@@ -465,10 +489,10 @@ fun CrestNativeEditor(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(16.dp)
+                                            .size(22.dp)
                                             .background(
                                                 color = CrestAccentPrimary,
-                                                shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp, topEnd = 0.dp)
+                                                shape = RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 0.dp)
                                             )
                                     )
                                 }
@@ -477,32 +501,53 @@ fun CrestNativeEditor(
                                 val hEndPx = try { textLayoutResult?.getCursorRect(selEnd.character)?.left ?: (selEnd.character * fontWidthPx) } catch (t: Throwable) { selEnd.character * fontWidthPx }
                                 val hEndDp = with(density) { hEndPx.toDp() }
                                 var endAccumulatedX by remember { mutableStateOf(0f) }
+                                var endAccumulatedY by remember { mutableStateOf(0f) }
 
                                 // Vertical cursor line at selection end
                                 Box(
                                     modifier = Modifier
+                                        .zIndex(99f)
                                         .offset(x = hEndDp)
                                         .width(2.dp)
                                         .height(18.dp)
                                         .background(Color.White)
                                 )
-                                // Right teardrop handle (curves down & right) with touch drag detection
+                                // Right teardrop handle (curves down & right) with touch drag detection & zIndex
                                 Box(
                                     modifier = Modifier
+                                        .zIndex(100f)
                                         .offset(x = hEndDp, y = 18.dp)
-                                        .size(28.dp)
-                                        .pointerInput(lineIdx, selStart, selEnd) {
+                                        .size(36.dp)
+                                        .pointerInput(lineIdx, selStart, selEnd, state.lineCount) {
                                             detectDragGestures(
-                                                onDragStart = { endAccumulatedX = 0f },
+                                                onDragStart = {
+                                                    endAccumulatedX = 0f
+                                                    endAccumulatedY = 0f
+                                                },
                                                 onDrag = { change, dragAmount ->
                                                     change.consume()
                                                     endAccumulatedX += dragAmount.x
-                                                    if (fontWidthPx > 0 && kotlin.math.abs(endAccumulatedX) >= fontWidthPx) {
-                                                        val charsMoved = (endAccumulatedX / fontWidthPx).toInt()
+                                                    endAccumulatedY += dragAmount.y
+
+                                                    var curLine = selEnd.line
+                                                    var curChar = selEnd.character
+
+                                                    if (lineHeightPx > 0 && kotlin.math.abs(endAccumulatedY) >= lineHeightPx * 0.7f) {
+                                                        val linesMoved = if (endAccumulatedY > 0) 1 else -1
+                                                        endAccumulatedY -= linesMoved * lineHeightPx
+                                                        curLine = (curLine + linesMoved).coerceIn(0, (state.lineCount - 1).coerceAtLeast(0))
+                                                    }
+
+                                                    val targetLineText = state.lines.getOrNull(curLine) ?: ""
+                                                    if (fontWidthPx > 0 && kotlin.math.abs(endAccumulatedX) >= fontWidthPx * 0.7f) {
+                                                        val charsMoved = if (endAccumulatedX > 0) 1 else -1
                                                         endAccumulatedX -= charsMoved * fontWidthPx
-                                                        val newChar = (selEnd.character + charsMoved).coerceIn(0, lineText.length)
-                                                        if (newChar != selEnd.character && newChar >= selStart.character) {
-                                                            engine.setSelection(selStart.line, selStart.character, lineIdx, newChar)
+                                                        curChar = (curChar + charsMoved).coerceIn(0, targetLineText.length)
+                                                    }
+
+                                                    if (curLine != selEnd.line || curChar != selEnd.character) {
+                                                        if (curLine > selStart.line || (curLine == selStart.line && curChar >= selStart.character)) {
+                                                            engine.setSelection(selStart.line, selStart.character, curLine, curChar)
                                                             refreshState()
                                                         }
                                                     }
@@ -513,10 +558,10 @@ fun CrestNativeEditor(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(16.dp)
+                                            .size(22.dp)
                                             .background(
                                                 color = CrestAccentPrimary,
-                                                shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp, topEnd = 16.dp)
+                                                shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 22.dp, bottomEnd = 22.dp, topEnd = 22.dp)
                                             )
                                     )
                                 }
