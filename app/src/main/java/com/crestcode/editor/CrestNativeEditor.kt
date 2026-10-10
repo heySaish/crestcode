@@ -7,6 +7,7 @@ import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -421,30 +422,104 @@ fun CrestNativeEditor(
                             onTextLayout = { textLayoutResult = it }
                         )
 
-                        // 3. Render selection start/end teardrop handles
+                        // 3. Render selection start/end teardrop water-drop handles with drag gestures
                         if (isSelectionActive) {
                             val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
                             if (lineIdx == selStart.line) {
                                 val hStartPx = try { textLayoutResult?.getCursorRect(selStart.character)?.left ?: (selStart.character * fontWidthPx) } catch (t: Throwable) { selStart.character * fontWidthPx }
                                 val hStartDp = with(density) { hStartPx.toDp() }
+                                var startAccumulatedX by remember { mutableStateOf(0f) }
+
+                                // Vertical cursor line at selection start
                                 Box(
                                     modifier = Modifier
-                                        .offset(x = hStartDp - 6.dp, y = 14.dp)
-                                        .size(12.dp)
-                                        .background(CrestAccentPrimary, shape = CircleShape)
-                                        .border(1.5.dp, Color.White, CircleShape)
+                                        .offset(x = hStartDp)
+                                        .width(2.dp)
+                                        .height(18.dp)
+                                        .background(Color.White)
                                 )
+                                // Left teardrop handle (curves down & left) with touch drag detection
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = hStartDp - 20.dp, y = 18.dp)
+                                        .size(28.dp)
+                                        .pointerInput(lineIdx, selStart, selEnd) {
+                                            detectDragGestures(
+                                                onDragStart = { startAccumulatedX = 0f },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    startAccumulatedX += dragAmount.x
+                                                    if (fontWidthPx > 0 && kotlin.math.abs(startAccumulatedX) >= fontWidthPx) {
+                                                        val charsMoved = (startAccumulatedX / fontWidthPx).toInt()
+                                                        startAccumulatedX -= charsMoved * fontWidthPx
+                                                        val newChar = (selStart.character + charsMoved).coerceIn(0, lineText.length)
+                                                        if (newChar != selStart.character && newChar <= selEnd.character) {
+                                                            engine.setSelection(lineIdx, newChar, selEnd.line, selEnd.character)
+                                                            refreshState()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.TopEnd
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .background(
+                                                color = CrestAccentPrimary,
+                                                shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp, topEnd = 0.dp)
+                                            )
+                                    )
+                                }
                             }
                             if (lineIdx == selEnd.line) {
                                 val hEndPx = try { textLayoutResult?.getCursorRect(selEnd.character)?.left ?: (selEnd.character * fontWidthPx) } catch (t: Throwable) { selEnd.character * fontWidthPx }
                                 val hEndDp = with(density) { hEndPx.toDp() }
+                                var endAccumulatedX by remember { mutableStateOf(0f) }
+
+                                // Vertical cursor line at selection end
                                 Box(
                                     modifier = Modifier
-                                        .offset(x = hEndDp - 6.dp, y = 14.dp)
-                                        .size(12.dp)
-                                        .background(CrestAccentPrimary, shape = CircleShape)
-                                        .border(1.5.dp, Color.White, CircleShape)
+                                        .offset(x = hEndDp)
+                                        .width(2.dp)
+                                        .height(18.dp)
+                                        .background(Color.White)
                                 )
+                                // Right teardrop handle (curves down & right) with touch drag detection
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = hEndDp, y = 18.dp)
+                                        .size(28.dp)
+                                        .pointerInput(lineIdx, selStart, selEnd) {
+                                            detectDragGestures(
+                                                onDragStart = { endAccumulatedX = 0f },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    endAccumulatedX += dragAmount.x
+                                                    if (fontWidthPx > 0 && kotlin.math.abs(endAccumulatedX) >= fontWidthPx) {
+                                                        val charsMoved = (endAccumulatedX / fontWidthPx).toInt()
+                                                        endAccumulatedX -= charsMoved * fontWidthPx
+                                                        val newChar = (selEnd.character + charsMoved).coerceIn(0, lineText.length)
+                                                        if (newChar != selEnd.character && newChar >= selStart.character) {
+                                                            engine.setSelection(selStart.line, selStart.character, lineIdx, newChar)
+                                                            refreshState()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.TopStart
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .background(
+                                                color = CrestAccentPrimary,
+                                                shape = RoundedCornerShape(topStart = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp, topEnd = 16.dp)
+                                            )
+                                    )
+                                }
                             }
                         }
 
