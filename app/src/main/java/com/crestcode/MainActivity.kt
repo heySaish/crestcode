@@ -197,8 +197,66 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         bottomBar = {
+                            var isCtrlActive by remember { mutableStateOf(false) }
+                            val clipboardManager = remember {
+                                context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                            }
                             Column {
-                                CrestExtraKeysBar()
+                                CrestExtraKeysBar(
+                                    isCtrlActive = isCtrlActive,
+                                    onKeyClick = { key ->
+                                        if (key == "CTRL") {
+                                            isCtrlActive = !isCtrlActive
+                                        } else {
+                                            if (isCtrlActive) {
+                                                when (key.lowercase()) {
+                                                    "c" -> {
+                                                        val selText = viewModel.engine.getSelectedText()
+                                                        if (selText.isNotEmpty()) {
+                                                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
+                                                        }
+                                                    }
+                                                    "v" -> {
+                                                        val clip = clipboardManager?.primaryClip
+                                                        if (clip != null && clip.itemCount > 0) {
+                                                            val pasteText = clip.getItemAt(0).text?.toString() ?: ""
+                                                            if (pasteText.isNotEmpty()) {
+                                                                viewModel.engine.insertText(pasteText)
+                                                                viewModel.markActiveTabModified(true)
+                                                            }
+                                                        }
+                                                    }
+                                                    "x" -> {
+                                                        val selText = viewModel.engine.getSelectedText()
+                                                        if (selText.isNotEmpty()) {
+                                                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
+                                                            viewModel.engine.deleteSelection()
+                                                            viewModel.markActiveTabModified(true)
+                                                        }
+                                                    }
+                                                    "a" -> {
+                                                        viewModel.engine.selectAll()
+                                                    }
+                                                    else -> {
+                                                        viewModel.engine.insertText(key)
+                                                        viewModel.markActiveTabModified(true)
+                                                    }
+                                                }
+                                                isCtrlActive = false
+                                            } else {
+                                                when (key) {
+                                                    "Tab" -> viewModel.engine.insertText("    ")
+                                                    "←" -> viewModel.engine.moveCursor("left")
+                                                    "→" -> viewModel.engine.moveCursor("right")
+                                                    "↑" -> viewModel.engine.moveCursor("up")
+                                                    "↓" -> viewModel.engine.moveCursor("down")
+                                                    else -> viewModel.engine.insertText(key)
+                                                }
+                                                viewModel.markActiveTabModified(true)
+                                            }
+                                        }
+                                    }
+                                )
                                 CrestStatusBar(
                                     language = activeLanguage
                                 )

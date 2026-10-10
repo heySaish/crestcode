@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -20,8 +21,9 @@ import com.crestcode.ui.theme.*
 @Composable
 fun CrestExtraKeysBar(
     keys: List<String> = listOf(
-        "Tab", "{", "}", "(", ")", "[", "]", ";", "=", ":", "\"", "'", "<", ">", "/", "|", "_", "-", "←", "→", "↑", "↓"
+        "CTRL", "Tab", "{", "}", "(", ")", "[", "]", ";", "=", ":", "\"", "'", "<", ">", "/", "|", "_", "-", "←", "→", "↑", "↓"
     ),
+    isCtrlActive: Boolean = false,
     onKeyClick: (String) -> Unit = {}
 ) {
     Row(
@@ -34,20 +36,25 @@ fun CrestExtraKeysBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         keys.forEach { key ->
+            val isActive = (key == "CTRL" && isCtrlActive)
+            val bg = if (isActive) CrestAccentPrimary else CrestKeyBg
+            val borderClr = if (isActive) CrestAccentPrimary else CrestKeyBorder
+            val txtClr = if (isActive) Color.White else CrestTextActive
+
             Box(
                 modifier = Modifier
                     .height(32.dp)
                     .widthIn(min = 34.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(CrestKeyBg)
-                    .border(1.dp, CrestKeyBorder, RoundedCornerShape(6.dp))
+                    .background(bg)
+                    .border(1.dp, borderClr, RoundedCornerShape(6.dp))
                     .clickable { onKeyClick(key) }
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = key,
-                    color = CrestTextActive,
+                    color = txtClr,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
