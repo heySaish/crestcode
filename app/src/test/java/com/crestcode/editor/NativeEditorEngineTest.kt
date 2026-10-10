@@ -6,7 +6,7 @@ import org.junit.Test
 class NativeEditorEngineTest {
 
     @Test
-    fn testNativeEditorEngineFallbackOperations() {
+    fun testNativeEditorEngineFallbackOperations() {
         val engine = NativeEditorEngine()
         engine.openFile("file:///test.kt", "kotlin", "fun main() {\n    println(\"Hello\")\n}")
 

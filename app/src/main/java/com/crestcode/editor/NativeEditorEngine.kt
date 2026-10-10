@@ -248,8 +248,8 @@ class NativeEditorEngine : AutoCloseable {
                         list.add(
                             CompletionItem(
                                 label = obj.getString("label"),
-                                detail = obj.optString("detail", null),
-                                insertText = obj.optString("insert_text", obj.getString("label"))
+                                detail = if (obj.has("detail")) obj.optString("detail") else null,
+                                insertText = if (obj.has("insert_text")) obj.optString("insert_text") else obj.getString("label")
                             )
                         )
                     }
