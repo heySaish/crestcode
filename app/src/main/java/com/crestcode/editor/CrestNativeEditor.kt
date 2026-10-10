@@ -51,7 +51,6 @@ fun CrestNativeEditor(
     val horizontalScroll = rememberScrollState()
     val density = LocalDensity.current
 
-    var lastSentinelLen by remember { mutableStateOf(IME_SENTINEL_COUNT) }
     var inputFieldValue by remember {
         mutableStateOf(TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT)))
     }
@@ -133,30 +132,23 @@ fun CrestNativeEditor(
             onValueChange = { newValue ->
                 val newText = newValue.text
 
-                if (newText.length < lastSentinelLen) {
+                if (newText.length < IME_SENTINEL_COUNT) {
                     // Backspace pressed (supports holding delete key continuously)
-                    val deletedCount = lastSentinelLen - newText.length
+                    val deletedCount = IME_SENTINEL_COUNT - newText.length
                     repeat(deletedCount) {
                         engine.deleteBackspace()
                     }
                     refreshState()
-                    lastSentinelLen = newText.length
-
-                    // Top up sentinel buffer when running low to sustain hold-to-delete
-                    if (lastSentinelLen < 10) {
-                        lastSentinelLen = IME_SENTINEL_COUNT
-                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
-                    }
-                } else if (newText.length > lastSentinelLen) {
+                } else if (newText.length > IME_SENTINEL_COUNT) {
                     // Text typed / pasted
-                    val added = newText.substring(lastSentinelLen).replace(IME_SENTINEL_CHAR, "")
+                    val added = newText.substring(IME_SENTINEL_COUNT).replace(IME_SENTINEL_CHAR, "")
                     if (added.isNotEmpty()) {
                         engine.insertText(added)
                         refreshState()
                     }
-                    lastSentinelLen = IME_SENTINEL_COUNT
-                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
                 }
+                // Always reset IME sentinel buffer state so Gboard hold-to-delete auto-repeats continuously
+                inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
             },
             modifier = Modifier
                 .size(1.dp)

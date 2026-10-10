@@ -110,4 +110,21 @@ mod tests {
         let read_back = read_message(&mut cursor).unwrap().unwrap();
         assert_eq!(read_back, payload);
     }
+
+    #[test]
+    fn test_continuous_backspace_hold_simulation() {
+        let mut engine = EditorEngine::new();
+        engine.open_document("file:///test.txt", "plaintext", "body {\n  font-family: system-ui;\n}");
+
+        // Move cursor to line 1 character 25 (end of line)
+        engine.set_selection(Position::new(1, 25), Position::new(1, 25));
+
+        // Simulate holding backspace 15 times
+        for _ in 0..15 {
+            engine.delete_backspace();
+        }
+
+        let text = engine.get_active_document().unwrap().buffer.get_text();
+        assert_eq!(text, "body {\n  font-fam\n}");
+    }
 }
