@@ -263,7 +263,7 @@ fun CrestNativeEditor(
                                     } catch (t: Throwable) { 0f }
                                 } else 0f
                             }
-                            val fontWidthPx = 13.sp.toPx() * 0.6f
+                            val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
                             val charWidthDp = with(density) {
                                 try {
                                     (textLayoutResult?.getCursorRect(bChar)?.width ?: fontWidthPx).toDp()
