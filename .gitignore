@@ -16,3 +16,7 @@ local.properties
 acode/
 *.keystore
 *.jks
+
+# Rust build target directory (so build files are never pushed to git)
+target/
+**/target/
