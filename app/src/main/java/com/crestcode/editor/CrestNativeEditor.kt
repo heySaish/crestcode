@@ -1,5 +1,7 @@
 package com.crestcode.editor
 
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -7,16 +9,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -24,18 +22,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.crestcode.ui.theme.*
-
-private const val IME_SENTINEL_CHAR = "\u200B"
-private const val IME_SENTINEL_COUNT = 100
-private val IME_SENTINEL_TEXT = IME_SENTINEL_CHAR.repeat(IME_SENTINEL_COUNT)
 
 @Composable
 fun CrestNativeEditor(
@@ -45,26 +38,31 @@ fun CrestNativeEditor(
     modifier: Modifier = Modifier
 ) {
     val renderState = remember { mutableStateOf(engine.getRenderState()) }
-    val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
     val density = LocalDensity.current
-
-    var inputFieldValue by remember {
-        mutableStateOf(TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT)))
-    }
+    var inputViewInstance by remember { mutableStateOf<CrestInputView?>(null) }
 
     fun refreshState() {
         renderState.value = engine.getRenderState()
         onContentChanged()
     }
 
+    fun requestInputFocus() {
+        inputViewInstance?.let { view ->
+            view.requestFocus()
+            val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+        } ?: run {
+            keyboardController?.show()
+        }
+    }
+
     // Automatically update render state when active tab changes
     LaunchedEffect(activeTabId) {
         renderState.value = engine.getRenderState()
-        focusRequester.requestFocus()
-        keyboardController?.show()
+        requestInputFocus()
     }
 
     val state = renderState.value
@@ -77,8 +75,7 @@ fun CrestNativeEditor(
             .fillMaxSize()
             .background(CrestBackground)
             .clickable {
-                focusRequester.requestFocus()
-                keyboardController?.show()
+                requestInputFocus()
             }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
@@ -121,37 +118,20 @@ fun CrestNativeEditor(
     ) {
         val minEditorWidth = maxWidth
 
-        // Hidden TextField to connect Android Soft Keyboard (IME)
-        BasicTextField(
-            value = inputFieldValue,
-            onValueChange = { newValue ->
-                val newText = newValue.text
-                val currentText = inputFieldValue.text
-
-                if (newText.length < currentText.length) {
-                    // Backspace pressed (supports holding delete key continuously for unlimited characters)
-                    val deletedCount = currentText.length - newText.length
-                    repeat(deletedCount) {
-                        engine.deleteBackspace()
-                    }
-                    refreshState()
-                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
-                } else if (newText.length > currentText.length) {
-                    // Text typed / pasted
-                    val added = newText.substring(currentText.length.coerceAtMost(newText.length)).replace(IME_SENTINEL_CHAR, "")
-                    if (added.isNotEmpty()) {
-                        engine.insertText(added)
-                        refreshState()
-                    }
-                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
-                } else {
-                    inputFieldValue = newValue
+        // Custom Android InputView hosting raw Zed-style InputConnection
+        AndroidView(
+            factory = { ctx ->
+                CrestInputView(ctx, engine, onContentChanged = { refreshState() }).also { view ->
+                    inputViewInstance = view
+                    view.requestFocus()
+                    val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
                 }
             },
-            modifier = Modifier
-                .size(1.dp)
-                .focusRequester(focusRequester),
-            cursorBrush = SolidColor(Color.Transparent)
+            update = { view ->
+                inputViewInstance = view
+            },
+            modifier = Modifier.size(1.dp)
         )
 
         Row(
@@ -179,8 +159,7 @@ fun CrestNativeEditor(
                                 val targetChar = state.cursor.character.coerceIn(0, targetLineText.length)
                                 engine.setCursor(lineIdx, targetChar)
                                 refreshState()
-                                focusRequester.requestFocus()
-                                keyboardController?.show()
+                                requestInputFocus()
                             }
                     )
                 }
@@ -238,8 +217,7 @@ fun CrestNativeEditor(
                                     }
                                     engine.setCursor(lineIdx, colIdx)
                                     refreshState()
-                                    focusRequester.requestFocus()
-                                    keyboardController?.show()
+                                    requestInputFocus()
                                 }
                             },
                         contentAlignment = Alignment.CenterStart
@@ -292,8 +270,7 @@ fun CrestNativeEditor(
                             val lastLineText = state.lines.getOrNull(lastLineIdx) ?: ""
                             engine.setCursor(lastLineIdx, lastLineText.length)
                             refreshState()
-                            focusRequester.requestFocus()
-                            keyboardController?.show()
+                            requestInputFocus()
                         }
                 )
             }
