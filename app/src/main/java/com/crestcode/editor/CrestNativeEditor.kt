@@ -34,7 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.crestcode.ui.theme.*
 
 private const val IME_SENTINEL_CHAR = "\u200B"
-private const val IME_SENTINEL_COUNT = 50
+private const val IME_SENTINEL_COUNT = 200
+private const val IME_INITIAL_CURSOR = 150
 private val IME_SENTINEL_TEXT = IME_SENTINEL_CHAR.repeat(IME_SENTINEL_COUNT)
 
 @Composable
@@ -52,7 +53,7 @@ fun CrestNativeEditor(
     val density = LocalDensity.current
 
     var inputFieldValue by remember {
-        mutableStateOf(TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT)))
+        mutableStateOf(TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_INITIAL_CURSOR)))
     }
 
     fun refreshState() {
@@ -126,31 +127,32 @@ fun CrestNativeEditor(
             value = inputFieldValue,
             onValueChange = { newValue ->
                 val newText = newValue.text
-                val currentText = inputFieldValue.text
+                val currentCursor = inputFieldValue.selection.start
+                val newCursor = newValue.selection.start
 
-                if (newText.length < currentText.length) {
+                if (newCursor < currentCursor) {
                     // Backspace pressed (supports holding delete key continuously)
-                    val deletedCount = currentText.length - newText.length
+                    val deletedCount = (currentCursor - newCursor).coerceAtLeast(1)
                     repeat(deletedCount) {
                         engine.deleteBackspace()
                     }
                     refreshState()
 
-                    if (newText.isEmpty()) {
-                        // Sentinel buffer depleted, reset buffer
-                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
+                    if (newCursor < 20) {
+                        // Re-center sentinel buffer when running low to maintain continuous hold-to-delete
+                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_INITIAL_CURSOR))
                     } else {
-                        // Preserve natural IME cursor selection so Gboard auto-repeat isn't cancelled
-                        inputFieldValue = newValue
+                        // Keep text buffer padded with sentinel string so Gboard sees exact expected cursor position
+                        inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, newValue.selection)
                     }
-                } else if (newText.length > currentText.length) {
+                } else if (newCursor > currentCursor || newText.length > inputFieldValue.text.length) {
                     // Text typed / pasted
-                    val added = newText.substring(currentText.length).replace(IME_SENTINEL_CHAR, "")
+                    val added = newText.substring(currentCursor.coerceAtMost(newText.length)).replace(IME_SENTINEL_CHAR, "")
                     if (added.isNotEmpty()) {
                         engine.insertText(added)
                         refreshState()
                     }
-                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_SENTINEL_COUNT))
+                    inputFieldValue = TextFieldValue(IME_SENTINEL_TEXT, TextRange(IME_INITIAL_CURSOR))
                 } else {
                     inputFieldValue = newValue
                 }
