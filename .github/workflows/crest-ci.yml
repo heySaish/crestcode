@@ -44,7 +44,7 @@ jobs:
           cd crest_editor_engine
           cargo ndk -t arm64-v8a build --release
           mkdir -p ../app/src/main/jniLibs/arm64-v8a
-          cp ../target/aarch64-linux-android/release/libcrest_editor_engine.so ../app/src/main/jniLibs/arm64-v8a/libcrest_editor.so
+          cp target/aarch64-linux-android/release/libcrest_editor_engine.so ../app/src/main/jniLibs/arm64-v8a/libcrest_editor.so || cp ../target/aarch64-linux-android/release/libcrest_editor_engine.so ../app/src/main/jniLibs/arm64-v8a/libcrest_editor.so
 
       - name: Run Android Unit Tests
         run: gradle test
