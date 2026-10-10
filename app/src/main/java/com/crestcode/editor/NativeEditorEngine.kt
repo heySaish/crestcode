@@ -146,6 +146,21 @@ class NativeEditorEngine : AutoCloseable {
         }
     }
 
+    fun setSelection(anchorLine: Int, anchorChar: Int, headLine: Int, headChar: Int) {
+        if (isLibraryLoaded && nativePtr != 0L) {
+            nativeSetSelection(nativePtr, anchorLine, anchorChar, headLine, headChar)
+        } else {
+            val validLine = headLine.coerceIn(0, (fallbackLines.size - 1).coerceAtLeast(0))
+            val lineLen = fallbackLines.getOrNull(validLine)?.length ?: 0
+            val validChar = headChar.coerceIn(0, lineLen)
+            fallbackCursor = EditorPosition(validLine, validChar)
+        }
+    }
+
+    fun setCursor(line: Int, character: Int) {
+        setSelection(line, character, line, character)
+    }
+
     fun undo(): Boolean {
         return if (isLibraryLoaded && nativePtr != 0L) {
             nativeUndo(nativePtr)
