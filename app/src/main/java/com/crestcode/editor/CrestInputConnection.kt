@@ -1,5 +1,8 @@
 package com.crestcode.editor
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.BaseInputConnection
@@ -7,10 +10,56 @@ import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.ExtractedTextRequest
 
 class CrestInputConnection(
-    targetView: View,
+    private val targetView: View,
     private val engine: NativeEditorEngine,
     private val onContentChanged: () -> Unit
 ) : BaseInputConnection(targetView, false) {
+
+    private val clipboardManager: ClipboardManager? by lazy {
+        targetView.context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    }
+
+    override fun performContextMenuAction(id: Int): Boolean {
+        when (id) {
+            android.R.id.copy -> {
+                val selectedText = engine.getSelectedText()
+                if (selectedText.isNotEmpty()) {
+                    clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selectedText))
+                }
+                return true
+            }
+            android.R.id.cut -> {
+                val selectedText = engine.getSelectedText()
+                if (selectedText.isNotEmpty()) {
+                    clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selectedText))
+                    engine.deleteSelection()
+                    onContentChanged()
+                }
+                return true
+            }
+            android.R.id.paste -> {
+                val clip = clipboardManager?.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val pasteText = clip.getItemAt(0).text?.toString() ?: ""
+                    if (pasteText.isNotEmpty()) {
+                        engine.insertText(pasteText)
+                        onContentChanged()
+                    }
+                }
+                return true
+            }
+            android.R.id.selectAll -> {
+                engine.selectAll()
+                onContentChanged()
+                return true
+            }
+        }
+        return super.performContextMenuAction(id)
+    }
+
+    override fun getSelectedText(flags: Int): CharSequence {
+        return engine.getSelectedText()
+    }
 
     override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
         val count = beforeLength.coerceAtLeast(1)

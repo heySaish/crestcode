@@ -137,4 +137,23 @@ mod tests {
         let doc_after = engine.get_active_document().unwrap();
         assert_eq!(doc_after.buffer.get_line(0), Some("fn test"));
     }
+
+    #[test]
+    fn test_word_selection_and_clipboard() {
+        let mut engine = EditorEngine::new();
+        engine.open_document("file:///test.rs", "rust", "hello world_code test");
+
+        // Long press word selection at 'world_code' (char 7)
+        engine.select_word_at(0, 7);
+        assert_eq!(engine.get_selected_text(), "world_code");
+
+        // Delete selection
+        engine.delete_selection();
+        let doc = engine.get_active_document().unwrap();
+        assert_eq!(doc.buffer.get_line(0), Some("hello  test"));
+
+        // Select all
+        engine.select_all();
+        assert_eq!(engine.get_selected_text(), "hello  test");
+    }
 }

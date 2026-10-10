@@ -42,12 +42,22 @@ impl Document {
         let new_pos = self.buffer.insert(start, text);
         self.selection = Selection::caret(new_pos);
         self.version += 1;
-        self.is_modified = true;
-
         TextChangeEvent {
             start,
             end: new_pos,
             text: text.to_string(),
+        }
+    }
+
+    pub fn apply_delete(&mut self, start: Position, end: Position) -> TextChangeEvent {
+        self.buffer.delete_range(start, end);
+        self.selection = Selection::caret(start);
+        self.version += 1;
+        self.is_modified = true;
+        TextChangeEvent {
+            start,
+            end,
+            text: String::new(),
         }
     }
 

@@ -115,6 +115,51 @@ pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeSetSel
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeSelectWordAt(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+    line: jint,
+    col: jint,
+) {
+    let engine = get_engine(ptr);
+    engine.select_word_at(line as usize, col as usize);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeGetSelectedText<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    ptr: jlong,
+) -> JString<'local> {
+    let engine = get_engine(ptr);
+    let text = engine.get_selected_text();
+    env.new_string(text).unwrap()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeDeleteSelection<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    ptr: jlong,
+) -> JString<'local> {
+    let engine = get_engine(ptr);
+    let change = engine.delete_selection();
+    let json_str = serde_json::to_string(&change).unwrap_or_default();
+    env.new_string(json_str).unwrap()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeSelectAll(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) {
+    let engine = get_engine(ptr);
+    engine.select_all();
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_crestcode_editor_NativeEditorEngine_nativeUndo(
     _env: JNIEnv,
     _class: JClass,

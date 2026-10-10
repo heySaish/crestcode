@@ -340,6 +340,94 @@ impl EditorEngine {
         }
     }
 
+    pub fn select_word_at(&mut self, line: usize, col: usize) {
+        if let Some(doc) = self.get_active_document_mut() {
+            let line_count = doc.buffer.line_count();
+            if line >= line_count { return; }
+            let line_str = match doc.buffer.get_line(line) {
+                Some(s) => s,
+                None => return,
+            };
+            let chars: Vec<char> = line_str.chars().collect();
+            if chars.is_empty() {
+                doc.selection = Selection::caret(Position::new(line, 0));
+                return;
+            }
+            let target_col = col.min(chars.len() - 1);
+            let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
+            if !is_word_char(chars[target_col]) {
+                doc.selection = Selection::new(
+                    Position::new(line, target_col),
+                    Position::new(line, target_col + 1),
+                );
+                return;
+            }
+            let mut start_col = target_col;
+            while start_col > 0 && is_word_char(chars[start_col - 1]) {
+                start_col -= 1;
+            }
+            let mut end_col = target_col + 1;
+            while end_col < chars.len() && is_word_char(chars[end_col]) {
+                end_col += 1;
+            }
+            doc.selection = Selection::new(
+                Position::new(line, start_col),
+                Position::new(line, end_col),
+            );
+        }
+    }
+
+    pub fn get_selected_text(&self) -> String {
+        if let Some(doc) = self.get_active_document() {
+            let start = doc.selection.start();
+            let end = doc.selection.end();
+            if start != end {
+                doc.buffer.get_text_range(start, end)
+            } else {
+                doc.buffer.get_line(start.line).unwrap_or_default().to_string()
+            }
+        } else {
+            String::new()
+        }
+    }
+
+    pub fn delete_selection(&mut self) -> Option<TextChangeEvent> {
+        let active_uri = self.active_uri.clone()?;
+        let doc = self.documents.get_mut(&active_uri)?;
+        let sel = doc.selection;
+        if sel.is_empty() { return None; }
+
+        let start = sel.start();
+        let end = sel.end();
+        let text_before = doc.buffer.get_text_range(start, end);
+
+        let change = doc.apply_delete(start, end);
+
+        let history = self.histories.get_mut(&active_uri)?;
+        history.push(UndoEntry {
+            start,
+            end_before: end,
+            end_after: start,
+            text_before,
+            text_after: String::new(),
+            selection_before: sel,
+            selection_after: Selection::caret(start),
+        });
+
+        Some(change)
+    }
+
+    pub fn select_all(&mut self) {
+        if let Some(doc) = self.get_active_document_mut() {
+            let last_line = doc.buffer.line_count().saturating_sub(1);
+            let last_col = doc.buffer.line_length_chars(last_line);
+            doc.selection = Selection::new(
+                Position::new(0, 0),
+                Position::new(last_line, last_col),
+            );
+        }
+    }
+
     pub fn highlight_visible_lines(&self, start_line: usize, end_line: usize) -> Vec<(usize, Vec<TokenSpan>)> {
         let mut result = Vec::new();
         if let Some(doc) = self.get_active_document() {

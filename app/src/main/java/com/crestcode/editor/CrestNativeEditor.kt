@@ -1,5 +1,7 @@
 package com.crestcode.editor
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
@@ -9,15 +11,19 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
@@ -43,7 +49,12 @@ fun CrestNativeEditor(
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
     val density = LocalDensity.current
+    val context = LocalContext.current
     var inputViewInstance by remember { mutableStateOf<CrestInputView?>(null) }
+
+    val clipboardManager = remember {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    }
 
     fun refreshState() {
         renderState.value = engine.getRenderState()
@@ -71,6 +82,23 @@ fun CrestNativeEditor(
         engine.getHighlightSpans(0, state.lineCount)
     }
 
+    val selAnchor = state.selection.anchor
+    val selHead = state.selection.head
+
+    val selStart = if (selAnchor.line < selHead.line || (selAnchor.line == selHead.line && selAnchor.character <= selHead.character)) {
+        selAnchor
+    } else {
+        selHead
+    }
+
+    val selEnd = if (selAnchor.line < selHead.line || (selAnchor.line == selHead.line && selAnchor.character <= selHead.character)) {
+        selHead
+    } else {
+        selAnchor
+    }
+
+    val isSelectionActive = (selStart.line != selEnd.line || selStart.character != selEnd.character)
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
@@ -82,38 +110,77 @@ fun CrestNativeEditor(
             }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
-                    when (keyEvent.key) {
-                        Key.DirectionLeft -> {
-                            engine.moveCursor("left")
-                            refreshState()
-                            true
+                    val isCtrlOrCmd = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
+                    if (isCtrlOrCmd) {
+                        when (keyEvent.key) {
+                            Key.C -> {
+                                val selText = engine.getSelectedText()
+                                if (selText.isNotEmpty()) {
+                                    clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selText))
+                                }
+                                true
+                            }
+                            Key.V -> {
+                                val clip = clipboardManager?.primaryClip
+                                if (clip != null && clip.itemCount > 0) {
+                                    val pasteText = clip.getItemAt(0).text?.toString() ?: ""
+                                    if (pasteText.isNotEmpty()) {
+                                        engine.insertText(pasteText)
+                                        refreshState()
+                                    }
+                                }
+                                true
+                            }
+                            Key.X -> {
+                                val selText = engine.getSelectedText()
+                                if (selText.isNotEmpty()) {
+                                    clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selText))
+                                    engine.deleteSelection()
+                                    refreshState()
+                                }
+                                true
+                            }
+                            Key.A -> {
+                                engine.selectAll()
+                                refreshState()
+                                true
+                            }
+                            else -> false
                         }
-                        Key.DirectionRight -> {
-                            engine.moveCursor("right")
-                            refreshState()
-                            true
+                    } else {
+                        when (keyEvent.key) {
+                            Key.DirectionLeft -> {
+                                engine.moveCursor("left")
+                                refreshState()
+                                true
+                            }
+                            Key.DirectionRight -> {
+                                engine.moveCursor("right")
+                                refreshState()
+                                true
+                            }
+                            Key.DirectionUp -> {
+                                engine.moveCursor("up")
+                                refreshState()
+                                true
+                            }
+                            Key.DirectionDown -> {
+                                engine.moveCursor("down")
+                                refreshState()
+                                true
+                            }
+                            Key.Enter -> {
+                                engine.insertText("\n")
+                                refreshState()
+                                true
+                            }
+                            Key.Tab -> {
+                                engine.insertText("    ")
+                                refreshState()
+                                true
+                            }
+                            else -> false
                         }
-                        Key.DirectionUp -> {
-                            engine.moveCursor("up")
-                            refreshState()
-                            true
-                        }
-                        Key.DirectionDown -> {
-                            engine.moveCursor("down")
-                            refreshState()
-                            true
-                        }
-                        Key.Enter -> {
-                            engine.insertText("\n")
-                            refreshState()
-                            true
-                        }
-                        Key.Tab -> {
-                            engine.insertText("    ")
-                            refreshState()
-                            true
-                        }
-                        else -> false
                     }
                 } else false
             }
@@ -207,6 +274,11 @@ fun CrestNativeEditor(
                         list
                     }
 
+                    // Selection bounds on this line
+                    val isLineInSelection = isSelectionActive && (lineIdx in selStart.line..selEnd.line)
+                    val selColStart = if (!isLineInSelection) 0 else if (lineIdx == selStart.line) selStart.character.coerceIn(0, lineText.length) else 0
+                    val selColEnd = if (!isLineInSelection) 0 else if (lineIdx == selEnd.line) selEnd.character.coerceIn(0, lineText.length) else lineText.length
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -216,27 +288,64 @@ fun CrestNativeEditor(
                                 if (isCurrentLine) CrestSurfaceHeader.copy(alpha = 0.4f) else Color.Transparent
                             )
                             .pointerInput(lineIdx, lineText) {
-                                detectTapGestures { offset ->
-                                    val layout = textLayoutResult
-                                    val colIdx = if (layout == null) {
-                                        val fontWidthPx = 13.sp.toPx() * 0.6f
-                                        if (fontWidthPx > 0) (offset.x / fontWidthPx).toInt().coerceIn(0, lineText.length) else lineText.length
-                                    } else {
-                                        if (offset.x >= layout.size.width.toFloat()) {
-                                            lineText.length
-                                        } else if (offset.x <= 0f) {
-                                            0
+                                detectTapGestures(
+                                    onTap = { offset ->
+                                        val layout = textLayoutResult
+                                        val colIdx = if (layout == null) {
+                                            val fontWidthPx = 13.sp.toPx() * 0.6f
+                                            if (fontWidthPx > 0) (offset.x / fontWidthPx).toInt().coerceIn(0, lineText.length) else lineText.length
                                         } else {
-                                            layout.getOffsetForPosition(offset).coerceIn(0, lineText.length)
+                                            if (offset.x >= layout.size.width.toFloat()) {
+                                                lineText.length
+                                            } else if (offset.x <= 0f) {
+                                                0
+                                            } else {
+                                                layout.getOffsetForPosition(offset).coerceIn(0, lineText.length)
+                                            }
                                         }
+                                        engine.setCursor(lineIdx, colIdx)
+                                        refreshState()
+                                        requestInputFocus()
+                                    },
+                                    onLongPress = { offset ->
+                                        val layout = textLayoutResult
+                                        val colIdx = if (layout == null) {
+                                            val fontWidthPx = 13.sp.toPx() * 0.6f
+                                            if (fontWidthPx > 0) (offset.x / fontWidthPx).toInt().coerceIn(0, lineText.length) else lineText.length
+                                        } else {
+                                            if (offset.x >= layout.size.width.toFloat()) {
+                                                lineText.length
+                                            } else if (offset.x <= 0f) {
+                                                0
+                                            } else {
+                                                layout.getOffsetForPosition(offset).coerceIn(0, lineText.length)
+                                            }
+                                        }
+                                        engine.selectWordAt(lineIdx, colIdx)
+                                        refreshState()
+                                        requestInputFocus()
                                     }
-                                    engine.setCursor(lineIdx, colIdx)
-                                    refreshState()
-                                    requestInputFocus()
-                                }
+                                )
                             },
                         contentAlignment = Alignment.CenterStart
                     ) {
+                        // 1. Text Selection Highlight Background
+                        if (isLineInSelection && selColStart < selColEnd) {
+                            val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
+                            val startPx = try { textLayoutResult?.getCursorRect(selColStart)?.left ?: (selColStart * fontWidthPx) } catch (t: Throwable) { selColStart * fontWidthPx }
+                            val endPx = try { textLayoutResult?.getCursorRect(selColEnd)?.left ?: (selColEnd * fontWidthPx) } catch (t: Throwable) { selColEnd * fontWidthPx }
+                            val startDp = with(density) { startPx.toDp() }
+                            val widthDp = with(density) { (endPx - startPx).coerceAtLeast(6f).toDp() }
+
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = startDp)
+                                    .width(widthDp)
+                                    .height(20.dp)
+                                    .background(CrestAccentPrimary.copy(alpha = 0.35f))
+                            )
+                        }
+
                         val annotatedText = buildAnnotatedString {
                             if (spans.isEmpty()) {
                                 append(lineText)
@@ -254,7 +363,7 @@ fun CrestNativeEditor(
                             }
                         }
 
-                        // Matching bracket highlights (hitbox box style)
+                        // 2. Matching bracket highlights (hitbox box style)
                         for (bChar in bracketsOnThisLine) {
                             val bracketOffsetPx = remember(textLayoutResult, bChar) {
                                 if (textLayoutResult != null && bChar < lineText.length) {
@@ -296,8 +405,35 @@ fun CrestNativeEditor(
                             onTextLayout = { textLayoutResult = it }
                         )
 
-                        // Render cursor indicator precisely at cursor offset
-                        if (isCurrentLine) {
+                        // 3. Render selection start/end teardrop handles
+                        if (isSelectionActive) {
+                            val fontWidthPx = with(density) { 13.sp.toPx() * 0.6f }
+                            if (lineIdx == selStart.line) {
+                                val hStartPx = try { textLayoutResult?.getCursorRect(selStart.character)?.left ?: (selStart.character * fontWidthPx) } catch (t: Throwable) { selStart.character * fontWidthPx }
+                                val hStartDp = with(density) { hStartPx.toDp() }
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = hStartDp - 6.dp, y = 14.dp)
+                                        .size(12.dp)
+                                        .background(CrestAccentPrimary, shape = CircleShape)
+                                        .border(1.5.dp, Color.White, CircleShape)
+                                )
+                            }
+                            if (lineIdx == selEnd.line) {
+                                val hEndPx = try { textLayoutResult?.getCursorRect(selEnd.character)?.left ?: (selEnd.character * fontWidthPx) } catch (t: Throwable) { selEnd.character * fontWidthPx }
+                                val hEndDp = with(density) { hEndPx.toDp() }
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = hEndDp - 6.dp, y = 14.dp)
+                                        .size(12.dp)
+                                        .background(CrestAccentPrimary, shape = CircleShape)
+                                        .border(1.5.dp, Color.White, CircleShape)
+                                )
+                            }
+                        }
+
+                        // 4. Render cursor indicator precisely at cursor offset
+                        if (isCurrentLine && !isSelectionActive) {
                             Box(
                                 modifier = Modifier
                                     .offset(x = cursorOffsetDp)
@@ -324,6 +460,70 @@ fun CrestNativeEditor(
                             }
                         }
                 )
+            }
+        }
+
+        // Floating Context Menu Toolbar (Copy, Cut, Paste, Select All - Clean Text, No Emojis)
+        if (isSelectionActive) {
+            Surface(
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .align(Alignment.TopCenter),
+                shape = RoundedCornerShape(24.dp),
+                color = CrestSurfaceHeader,
+                shadowElevation = 8.dp,
+                tonalElevation = 8.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CrestAccentPrimary.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = {
+                            val selText = engine.getSelectedText()
+                            if (selText.isNotEmpty()) {
+                                clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selText))
+                            }
+                        }
+                    ) {
+                        Text("Copy", color = CrestTextActive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    TextButton(
+                        onClick = {
+                            val selText = engine.getSelectedText()
+                            if (selText.isNotEmpty()) {
+                                clipboardManager?.setPrimaryClip(ClipData.newPlainText("CrestCode", selText))
+                                engine.deleteSelection()
+                                refreshState()
+                            }
+                        }
+                    ) {
+                        Text("Cut", color = CrestTextActive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    TextButton(
+                        onClick = {
+                            val clip = clipboardManager?.primaryClip
+                            if (clip != null && clip.itemCount > 0) {
+                                val pasteText = clip.getItemAt(0).text?.toString() ?: ""
+                                if (pasteText.isNotEmpty()) {
+                                    engine.insertText(pasteText)
+                                    refreshState()
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Paste", color = CrestTextActive, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    TextButton(
+                        onClick = {
+                            engine.selectAll()
+                            refreshState()
+                        }
+                    ) {
+                        Text("Select All", color = CrestAccentPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
     }

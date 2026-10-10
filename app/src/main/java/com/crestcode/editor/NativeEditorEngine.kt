@@ -158,6 +158,32 @@ class NativeEditorEngine : AutoCloseable {
         }
     }
 
+    fun selectWordAt(line: Int, col: Int) {
+        if (isLibraryLoaded && nativePtr != 0L) {
+            nativeSelectWordAt(nativePtr, line, col)
+        }
+    }
+
+    fun getSelectedText(): String {
+        if (isLibraryLoaded && nativePtr != 0L) {
+            return nativeGetSelectedText(nativePtr)
+        }
+        return fallbackLines.getOrNull(fallbackCursor.line) ?: ""
+    }
+
+    fun deleteSelection(): String {
+        if (isLibraryLoaded && nativePtr != 0L) {
+            return nativeDeleteSelection(nativePtr)
+        }
+        return ""
+    }
+
+    fun selectAll() {
+        if (isLibraryLoaded && nativePtr != 0L) {
+            nativeSelectAll(nativePtr)
+        }
+    }
+
     fun setCursor(line: Int, character: Int) {
         setSelection(line, character, line, character)
     }
@@ -324,6 +350,10 @@ class NativeEditorEngine : AutoCloseable {
     private external fun nativeDeleteBackspace(ptr: Long): String
     private external fun nativeMoveCursor(ptr: Long, direction: String, select: Boolean)
     private external fun nativeSetSelection(ptr: Long, anchorLine: Int, anchorChar: Int, headLine: Int, headChar: Int)
+    private external fun nativeSelectWordAt(ptr: Long, line: Int, col: Int)
+    private external fun nativeGetSelectedText(ptr: Long): String
+    private external fun nativeDeleteSelection(ptr: Long): String
+    private external fun nativeSelectAll(ptr: Long)
     private external fun nativeUndo(ptr: Long): Boolean
     private external fun nativeRedo(ptr: Long): Boolean
     private external fun nativeGetRenderStateJson(ptr: Long): String
