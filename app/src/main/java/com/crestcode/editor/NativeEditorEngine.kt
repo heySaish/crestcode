@@ -1,6 +1,5 @@
 package com.crestcode.editor
 
-import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,14 +28,30 @@ class NativeEditorEngine : AutoCloseable {
     private var nativePtr: Long = 0
     private var isLibraryLoaded = false
 
+    private fun safeLogI(tag: String, msg: String) {
+        try {
+            android.util.Log.i(tag, msg)
+        } catch (t: Throwable) {
+            println("[$tag] INFO: $msg")
+        }
+    }
+
+    private fun safeLogE(tag: String, msg: String, tr: Throwable? = null) {
+        try {
+            android.util.Log.e(tag, msg, tr)
+        } catch (t: Throwable) {
+            println("[$tag] ERROR: $msg ${tr?.message ?: ""}")
+        }
+    }
+
     init {
         try {
             System.loadLibrary("crest_editor")
             isLibraryLoaded = true
             nativePtr = nativeCreateEngine()
-            Log.i("NativeEditorEngine", "Successfully initialized Rust native editor engine pointer: $nativePtr")
+            safeLogI("NativeEditorEngine", "Successfully initialized Rust native editor engine pointer: $nativePtr")
         } catch (e: Throwable) {
-            Log.e("NativeEditorEngine", "Could not load libcrest_editor.so, falling back to pure Kotlin mock engine", e)
+            safeLogE("NativeEditorEngine", "Could not load libcrest_editor.so, falling back to pure Kotlin mock engine", e)
         }
     }
 
@@ -178,7 +193,7 @@ class NativeEditorEngine : AutoCloseable {
                         isModified = obj.optBoolean("is_modified", false)
                     )
                 } catch (e: Exception) {
-                    Log.e("NativeEditorEngine", "Error parsing render state JSON", e)
+                    safeLogE("NativeEditorEngine", "Error parsing render state JSON", e)
                 }
             }
         }
@@ -221,7 +236,7 @@ class NativeEditorEngine : AutoCloseable {
                         result[lineIdx] = spansList
                     }
                 } catch (e: Exception) {
-                    Log.e("NativeEditorEngine", "Error parsing highlight spans JSON", e)
+                    safeLogE("NativeEditorEngine", "Error parsing highlight spans JSON", e)
                 }
             }
         }
@@ -255,7 +270,7 @@ class NativeEditorEngine : AutoCloseable {
                     }
                     return list
                 } catch (e: Exception) {
-                    Log.e("NativeEditorEngine", "Error parsing completions JSON", e)
+                    safeLogE("NativeEditorEngine", "Error parsing completions JSON", e)
                 }
             }
         }

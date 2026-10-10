@@ -108,6 +108,9 @@ android {
             pickFirsts.add("**/libtermux.so")
         }
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
