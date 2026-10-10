@@ -63,6 +63,8 @@ class NativeEditorEngine : AutoCloseable {
     private var fallbackCursor = EditorPosition(0, 0)
     private var fallbackModified = false
 
+    var onStateChanged: (() -> Unit)? = null
+
     fun openFile(uri: String, languageId: String, content: String) {
         if (isLibraryLoaded && nativePtr != 0L) {
             nativeOpenFile(nativePtr, uri, languageId, content)
@@ -73,12 +75,14 @@ class NativeEditorEngine : AutoCloseable {
             fallbackCursor = EditorPosition(0, 0)
             fallbackModified = false
         }
+        onStateChanged?.invoke()
     }
 
     fun closeFile(uri: String) {
         if (isLibraryLoaded && nativePtr != 0L) {
             nativeCloseFile(nativePtr, uri)
         }
+        onStateChanged?.invoke()
     }
 
     fun insertText(text: String) {
@@ -105,6 +109,7 @@ class NativeEditorEngine : AutoCloseable {
             }
             fallbackModified = true
         }
+        onStateChanged?.invoke()
     }
 
     fun deleteBackspace() {
@@ -127,6 +132,7 @@ class NativeEditorEngine : AutoCloseable {
             }
             fallbackModified = true
         }
+        onStateChanged?.invoke()
     }
 
     fun moveCursor(direction: String, select: Boolean = false) {
@@ -145,6 +151,7 @@ class NativeEditorEngine : AutoCloseable {
                 else -> fallbackCursor
             }
         }
+        onStateChanged?.invoke()
     }
 
     fun setSelection(anchorLine: Int, anchorChar: Int, headLine: Int, headChar: Int) {
@@ -156,12 +163,14 @@ class NativeEditorEngine : AutoCloseable {
             val validChar = headChar.coerceIn(0, lineLen)
             fallbackCursor = EditorPosition(validLine, validChar)
         }
+        onStateChanged?.invoke()
     }
 
     fun selectWordAt(line: Int, col: Int) {
         if (isLibraryLoaded && nativePtr != 0L) {
             nativeSelectWordAt(nativePtr, line, col)
         }
+        onStateChanged?.invoke()
     }
 
     fun getSelectedText(): String {
@@ -172,16 +181,18 @@ class NativeEditorEngine : AutoCloseable {
     }
 
     fun deleteSelection(): String {
-        if (isLibraryLoaded && nativePtr != 0L) {
-            return nativeDeleteSelection(nativePtr)
-        }
-        return ""
+        val result = if (isLibraryLoaded && nativePtr != 0L) {
+            nativeDeleteSelection(nativePtr)
+        } else ""
+        onStateChanged?.invoke()
+        return result
     }
 
     fun selectAll() {
         if (isLibraryLoaded && nativePtr != 0L) {
             nativeSelectAll(nativePtr)
         }
+        onStateChanged?.invoke()
     }
 
     fun setCursor(line: Int, character: Int) {
@@ -189,15 +200,19 @@ class NativeEditorEngine : AutoCloseable {
     }
 
     fun undo(): Boolean {
-        return if (isLibraryLoaded && nativePtr != 0L) {
+        val result = if (isLibraryLoaded && nativePtr != 0L) {
             nativeUndo(nativePtr)
         } else false
+        onStateChanged?.invoke()
+        return result
     }
 
     fun redo(): Boolean {
-        return if (isLibraryLoaded && nativePtr != 0L) {
+        val result = if (isLibraryLoaded && nativePtr != 0L) {
             nativeRedo(nativePtr)
         } else false
+        onStateChanged?.invoke()
+        return result
     }
 
     fun getRenderState(): RenderState {

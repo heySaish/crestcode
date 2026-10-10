@@ -42,6 +42,7 @@ fun CrestNativeEditor(
     engine: NativeEditorEngine,
     activeTabId: String,
     onContentChanged: () -> Unit,
+    keyboardToggleTrigger: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val renderState = remember { mutableStateOf(engine.getRenderState()) }
@@ -68,6 +69,21 @@ fun CrestNativeEditor(
             imm?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
         } ?: run {
             keyboardController?.show()
+        }
+    }
+
+    DisposableEffect(engine) {
+        engine.onStateChanged = {
+            renderState.value = engine.getRenderState()
+        }
+        onDispose {
+            engine.onStateChanged = null
+        }
+    }
+
+    LaunchedEffect(keyboardToggleTrigger) {
+        if (keyboardToggleTrigger > 0) {
+            requestInputFocus()
         }
     }
 

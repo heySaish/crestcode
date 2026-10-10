@@ -297,20 +297,62 @@ fun TerminalScreen(
                 },
                 onToggleKeyboard = { showKeyboard() },
                 onKeyClick = { key ->
-                    val seq = when (key) {
-                        "ESC" -> "\u001b"
-                        "HOME" -> "\u001b[1~"
-                        "END" -> "\u001b[4~"
-                        "PGUP" -> "\u001b[5~"
-                        "PGDN" -> "\u001b[6~"
-                        "TAB" -> "\t"
-                        "↑" -> "\u001b[A"
-                        "↓" -> "\u001b[B"
-                        "←" -> "\u001b[D"
-                        "→" -> "\u001b[C"
-                        else -> key
+                    val ctrl = isCtrlActive
+                    val alt = isAltActive
+                    if (ctrl || alt) {
+                        isCtrlActive = false
+                        isAltActive = false
+                        clientRef?.isCtrlActive = false
+                        clientRef?.isAltActive = false
+
+                        if (key.length == 1) {
+                            val ch = key[0]
+                            if (ctrl) {
+                                val codePoint = when {
+                                    ch in 'a'..'z' -> (ch - 'a' + 1).code
+                                    ch in 'A'..'Z' -> (ch - 'A' + 1).code
+                                    else -> ch.code
+                                }
+                                currentSession?.writeCodePoint(alt, codePoint)
+                            } else if (alt) {
+                                currentSession?.writeCodePoint(true, ch.code)
+                            }
+                        } else {
+                            val seq = when (key) {
+                                "ESC" -> "\u001b"
+                                "HOME" -> "\u001b[1~"
+                                "END" -> "\u001b[4~"
+                                "PGUP" -> "\u001b[5~"
+                                "PGDN" -> "\u001b[6~"
+                                "TAB" -> "\t"
+                                "↑" -> "\u001b[A"
+                                "↓" -> "\u001b[B"
+                                "←" -> "\u001b[D"
+                                "→" -> "\u001b[C"
+                                else -> key
+                            }
+                            if (alt) {
+                                currentSession?.write("\u001b" + seq)
+                            } else {
+                                currentSession?.write(seq)
+                            }
+                        }
+                    } else {
+                        val seq = when (key) {
+                            "ESC" -> "\u001b"
+                            "HOME" -> "\u001b[1~"
+                            "END" -> "\u001b[4~"
+                            "PGUP" -> "\u001b[5~"
+                            "PGDN" -> "\u001b[6~"
+                            "TAB" -> "\t"
+                            "↑" -> "\u001b[A"
+                            "↓" -> "\u001b[B"
+                            "←" -> "\u001b[D"
+                            "→" -> "\u001b[C"
+                            else -> key
+                        }
+                        currentSession?.write(seq)
                     }
-                    currentSession?.write(seq)
                 }
             )
         }

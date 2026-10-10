@@ -199,66 +199,83 @@ class MainActivity : ComponentActivity() {
                         },
                         bottomBar = {
                             var isCtrlActive by remember { mutableStateOf(false) }
+                            var keyboardToggleTrigger by remember { mutableStateOf(0) }
                             val clipboardManager = remember {
                                 context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                             }
                             Column {
-                                CrestExtraKeysBar(
-                                    isCtrlActive = isCtrlActive,
-                                    onToggleCtrl = {
-                                        isCtrlActive = !isCtrlActive
-                                    },
-                                    onKeyClick = { key ->
-                                        if (isCtrlActive) {
-                                            when (key.lowercase()) {
-                                                "c" -> {
-                                                    val selText = viewModel.engine.getSelectedText()
-                                                    if (selText.isNotEmpty()) {
-                                                        clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
+                                if (!showTerminal) {
+                                    CrestExtraKeysBar(
+                                        isCtrlActive = isCtrlActive,
+                                        onToggleCtrl = {
+                                            isCtrlActive = !isCtrlActive
+                                        },
+                                        onToggleKeyboard = {
+                                            keyboardToggleTrigger++
+                                        },
+                                        onKeyClick = { key ->
+                                            if (isCtrlActive) {
+                                                when (key.lowercase()) {
+                                                    "c" -> {
+                                                        val selText = viewModel.engine.getSelectedText()
+                                                        if (selText.isNotEmpty()) {
+                                                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
+                                                        }
                                                     }
-                                                }
-                                                "v" -> {
-                                                    val clip = clipboardManager?.primaryClip
-                                                    if (clip != null && clip.itemCount > 0) {
-                                                        val pasteText = clip.getItemAt(0).text?.toString() ?: ""
-                                                        if (pasteText.isNotEmpty()) {
-                                                            viewModel.engine.insertText(pasteText)
+                                                    "v" -> {
+                                                        val clip = clipboardManager?.primaryClip
+                                                        if (clip != null && clip.itemCount > 0) {
+                                                            val pasteText = clip.getItemAt(0).text?.toString() ?: ""
+                                                            if (pasteText.isNotEmpty()) {
+                                                                viewModel.engine.insertText(pasteText)
+                                                                viewModel.markActiveTabModified(true)
+                                                            }
+                                                        }
+                                                    }
+                                                    "x" -> {
+                                                        val selText = viewModel.engine.getSelectedText()
+                                                        if (selText.isNotEmpty()) {
+                                                            clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
+                                                            viewModel.engine.deleteSelection()
                                                             viewModel.markActiveTabModified(true)
                                                         }
                                                     }
+                                                    "a" -> {
+                                                        viewModel.engine.selectAll()
+                                                    }
                                                 }
-                                                "x" -> {
-                                                    val selText = viewModel.engine.getSelectedText()
-                                                    if (selText.isNotEmpty()) {
-                                                        clipboardManager?.setPrimaryClip(android.content.ClipData.newPlainText("CrestCode", selText))
-                                                        viewModel.engine.deleteSelection()
+                                                isCtrlActive = false
+                                            } else {
+                                                when (key) {
+                                                    "TAB", "Tab" -> {
+                                                        viewModel.engine.insertText("    ")
+                                                        viewModel.markActiveTabModified(true)
+                                                    }
+                                                    "←" -> viewModel.engine.moveCursor("left")
+                                                    "→" -> viewModel.engine.moveCursor("right")
+                                                    "↑" -> viewModel.engine.moveCursor("up")
+                                                    "↓" -> viewModel.engine.moveCursor("down")
+                                                    "HOME" -> viewModel.engine.moveCursor("line_start")
+                                                    "END" -> viewModel.engine.moveCursor("line_end")
+                                                    "PGUP" -> repeat(10) { viewModel.engine.moveCursor("up") }
+                                                    "PGDN" -> repeat(10) { viewModel.engine.moveCursor("down") }
+                                                    "ESC" -> {
+                                                        val renderState = viewModel.engine.getRenderState()
+                                                        val sel = renderState.selection
+                                                        if (sel.anchor != sel.head) {
+                                                            viewModel.engine.setCursor(renderState.cursor.line, renderState.cursor.character)
+                                                        }
+                                                    }
+                                                    "CTRL", "ALT" -> { /* Handled via toggles */ }
+                                                    else -> {
+                                                        viewModel.engine.insertText(key)
                                                         viewModel.markActiveTabModified(true)
                                                     }
                                                 }
-                                                "a" -> {
-                                                    viewModel.engine.selectAll()
-                                                }
-                                                else -> {
-                                                    viewModel.engine.insertText(key)
-                                                    viewModel.markActiveTabModified(true)
-                                                }
                                             }
-                                            isCtrlActive = false
-                                        } else {
-                                            when (key) {
-                                                "TAB", "Tab" -> viewModel.engine.insertText("    ")
-                                                "←" -> viewModel.engine.moveCursor("left")
-                                                "→" -> viewModel.engine.moveCursor("right")
-                                                "↑" -> viewModel.engine.moveCursor("up")
-                                                "↓" -> viewModel.engine.moveCursor("down")
-                                                "HOME" -> viewModel.engine.moveCursor("line_start")
-                                                "END" -> viewModel.engine.moveCursor("line_end")
-                                                else -> viewModel.engine.insertText(key)
-                                            }
-                                            viewModel.markActiveTabModified(true)
                                         }
-                                    }
-                                )
+                                    )
+                                }
                                 CrestStatusBar(
                                     language = activeLanguage
                                 )
@@ -285,6 +302,7 @@ class MainActivity : ComponentActivity() {
                                     onContentChanged = {
                                         viewModel.markActiveTabModified(true)
                                     },
+                                    keyboardToggleTrigger = keyboardToggleTrigger,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
