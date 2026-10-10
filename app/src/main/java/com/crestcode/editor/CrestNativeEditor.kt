@@ -195,7 +195,7 @@ fun CrestNativeEditor(
                 }
             }
 
-            // Code Text Content Area (full width line selection support)
+            // Code Text Content Area (full line width hitbox support)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -225,18 +225,26 @@ fun CrestNativeEditor(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .defaultMinSize(minWidth = 2000.dp)
                             .height(20.dp)
                             .background(
                                 if (isCurrentLine) CrestSurfaceHeader.copy(alpha = 0.4f) else Color.Transparent
                             )
                             .pointerInput(lineIdx, lineText) {
                                 detectTapGestures { offset ->
-                                    val charOffset = textLayoutResult?.getOffsetForPosition(offset)
-                                        ?: run {
-                                            val fontWidthPx = 13.sp.toPx() * 0.6f
-                                            if (fontWidthPx > 0) (offset.x / fontWidthPx).toInt() else 0
+                                    val layout = textLayoutResult
+                                    val colIdx = if (layout == null) {
+                                        val fontWidthPx = 13.sp.toPx() * 0.6f
+                                        if (fontWidthPx > 0) (offset.x / fontWidthPx).toInt().coerceIn(0, lineText.length) else lineText.length
+                                    } else {
+                                        if (offset.x >= layout.size.width.toFloat()) {
+                                            lineText.length
+                                        } else if (offset.x <= 0f) {
+                                            0
+                                        } else {
+                                            layout.getOffsetForPosition(offset).coerceIn(0, lineText.length)
                                         }
-                                    val colIdx = charOffset.coerceIn(0, lineText.length)
+                                    }
                                     engine.setCursor(lineIdx, colIdx)
                                     refreshState()
                                     focusRequester.requestFocus()
